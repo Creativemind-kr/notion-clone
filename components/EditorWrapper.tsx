@@ -48,7 +48,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [copied, setCopied] = useState(false)
 
   const copyLink = () => {
-    navigator.clipboard.writeText(window.location.href)
+    const shareUrl = `${window.location.origin}/share/${page.id}`
+    navigator.clipboard.writeText(shareUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
