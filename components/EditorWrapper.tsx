@@ -47,6 +47,21 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const supabase = createClient()
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedSelection = useRef<{ from: number; to: number } | null>(null)
+
+  const saveSelection = () => {
+    if (editor) {
+      savedSelection.current = { from: editor.state.selection.from, to: editor.state.selection.to }
+    }
+  }
+
+  const applyWithSelection = (fn: () => void) => {
+    if (editor && savedSelection.current) {
+      const { from, to } = savedSelection.current
+      editor.chain().setTextSelection({ from, to }).run()
+    }
+    fn()
+  }
 
   const save = useCallback(async (newTitle: string, content: string) => {
     setSaving(true)
@@ -118,8 +133,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
         {/* 글꼴 */}
         <select
-          onMouseDown={(e) => e.preventDefault()}
-          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+          onFocus={saveSelection}
+          onChange={(e) => applyWithSelection(() => editor.chain().focus().setFontFamily(e.target.value).run())}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
           title="글꼴"
         >
@@ -128,8 +143,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
         {/* 글자 크기 */}
         <select
-          onMouseDown={(e) => e.preventDefault()}
-          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+          onFocus={saveSelection}
+          onChange={(e) => applyWithSelection(() => editor.chain().focus().setFontSize(e.target.value).run())}
           className="text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
           title="글자 크기"
         >
