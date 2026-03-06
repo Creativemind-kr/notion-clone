@@ -22,6 +22,7 @@ export default function Sidebar({ userName }: { userName: string }) {
     const { data } = await supabase
       .from('pages')
       .select('id, title, created_at')
+      .eq('author_name', userName)
       .order('created_at', { ascending: false })
     setPages(data || [])
     setLoading(false)
@@ -32,7 +33,7 @@ export default function Sidebar({ userName }: { userName: string }) {
 
     const channel = supabase
       .channel('pages-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pages' }, fetchPages)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pages', filter: `author_name=eq.${userName}` }, fetchPages)
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
