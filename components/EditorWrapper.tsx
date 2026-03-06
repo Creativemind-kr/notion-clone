@@ -44,8 +44,11 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [title, setTitle] = useState(page.title)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(true)
+  const [saveError, setSaveError] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copied, setCopied] = useState(false)
+  const isMounted = useRef(true)
+  const titleRef = useRef(title)
 
   const copyLink = () => {
     const shareUrl = `${window.location.origin}/share/${page.id}`
@@ -56,6 +59,18 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const supabase = createClient()
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
+
+  useEffect(() => {
+    titleRef.current = title
+  }, [title])
+
+  useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [])
 
   const saveSelection = () => {
     if (editor) {
@@ -72,10 +87,18 @@ export default function EditorWrapper({ page }: { page: Page }) {
   }
 
   const save = useCallback(async (newTitle: string, content: string) => {
+    if (!isMounted.current) return
     setSaving(true)
-    await supabase.from('pages').update({ title: newTitle, content, updated_at: new Date().toISOString() }).eq('id', page.id)
+    setSaveError(false)
+    const { error } = await supabase.from('pages').update({ title: newTitle, content, updated_at: new Date().toISOString() }).eq('id', page.id)
+    if (!isMounted.current) return
     setSaving(false)
-    setSaved(true)
+    if (error) {
+      setSaveError(true)
+      setSaved(false)
+    } else {
+      setSaved(true)
+    }
   }, [supabase, page.id])
 
   const scheduleSave = useCallback((newTitle: string, content: string) => {
@@ -108,7 +131,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       try { return page.content ? JSON.parse(page.content) : '' } catch { return page.content || '' }
     })(),
     onUpdate: ({ editor }) => {
-      scheduleSave(title, JSON.stringify(editor.getJSON()))
+      scheduleSave(titleRef.current, JSON.stringify(editor.getJSON()))
     },
     editorProps: {
       handlePaste: (view, event) => {
@@ -250,7 +273,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
         >
           {copied ? <><Check size={12} className="text-green-500" /> 복사됨</> : <><Share2 size={12} /> 공유</>}
         </button>
-        <span className="text-xs text-gray-400 ml-2">{saving ? '저장 중...' : saved ? '저장됨' : ''}</span>
+        <span className={`text-xs ml-2 ${saveError ? 'text-red-500' : 'text-gray-400'}`}>
+          {saving ? '저장 중...' : saveError ? '저장 실패 (재시도 중...)' : saved ? '저장됨' : ''}
+        </span>
       </div>
 
       {/* 에디터 */}

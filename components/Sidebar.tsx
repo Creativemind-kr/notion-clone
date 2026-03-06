@@ -111,9 +111,15 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   useEffect(() => {
     fetchPages()
-    const interval = setInterval(fetchPages, 2000)
-    return () => clearInterval(interval)
-  }, [fetchPages])
+    const channel = supabase
+      .channel(`pages-${userName}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'pages', filter: `author_name=eq.${userName}` },
+        () => fetchPages()
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchPages, supabase, userName])
 
   const navigate = (id: string) => {
     router.push(`/dashboard/page/${id}`)
