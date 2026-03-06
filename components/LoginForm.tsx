@@ -1,15 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function LoginForm() {
   const [name, setName] = useState('')
+  const [redirect, setRedirect] = useState('/dashboard')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const r = params.get('redirect')
+    if (r) setRedirect(r)
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     localStorage.setItem('workspace_user', name.trim())
-    window.location.href = '/dashboard'
+    window.location.href = redirect
   }
 
   return (

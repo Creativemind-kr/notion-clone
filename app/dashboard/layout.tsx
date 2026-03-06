@@ -12,7 +12,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const name = localStorage.getItem('workspace_user')
     if (!name) {
-      router.replace('/login')
+      const redirect = window.location.pathname
+      router.replace(`/login?redirect=${encodeURIComponent(redirect)}`)
     } else {
       setUserName(name)
     }

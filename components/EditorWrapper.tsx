@@ -21,7 +21,7 @@ import {
   Bold, Italic, UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
-  Code, Quote, Highlighter, Link2,
+  Code, Quote, Highlighter, Link2, Share2, Check,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -45,6 +45,13 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(true)
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
   const supabase = createClient()
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
@@ -217,7 +224,14 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <button onMouseDown={(e) => { e.preventDefault(); setLink() }} title="링크" className={`p-1.5 rounded transition-colors ${editor.isActive('link') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}><Link2 size={14} /></button>
 
         <div className="flex-1" />
-        <span className="text-xs text-gray-400">{saving ? '저장 중...' : saved ? '저장됨' : ''}</span>
+        <button
+          onClick={copyLink}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
+          title="페이지 링크 복사"
+        >
+          {copied ? <><Check size={12} className="text-green-500" /> 복사됨</> : <><Share2 size={12} /> 공유</>}
+        </button>
+        <span className="text-xs text-gray-400 ml-2">{saving ? '저장 중...' : saved ? '저장됨' : ''}</span>
       </div>
 
       {/* 에디터 */}
