@@ -110,6 +110,24 @@ export default function EditorWrapper({ page }: { page: Page }) {
     onUpdate: ({ editor }) => {
       scheduleSave(title, JSON.stringify(editor.getJSON()))
     },
+    editorProps: {
+      handlePaste: (view, event) => {
+        const items = Array.from(event.clipboardData?.items || [])
+        const imageItem = items.find(item => item.type.startsWith('image/'))
+        if (!imageItem) return false
+        const file = imageItem.getAsFile()
+        if (!file) return false
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const src = e.target?.result as string
+          const node = view.state.schema.nodes.image.create({ src })
+          const tr = view.state.tr.replaceSelectionWith(node)
+          view.dispatch(tr)
+        }
+        reader.readAsDataURL(file)
+        return true
+      },
+    },
     immediatelyRender: false,
   })
 
