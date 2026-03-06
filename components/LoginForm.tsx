@@ -30,7 +30,7 @@ export default function LoginForm() {
     } else if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError('이메일 또는 비밀번호가 틀렸습니다. 이메일 인증을 완료했는지 확인해주세요.')
-      else { router.push('/dashboard'); router.refresh() }
+      else { window.location.href = '/dashboard' }
     } else if (mode === 'reset') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
