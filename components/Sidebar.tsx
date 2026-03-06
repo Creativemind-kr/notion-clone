@@ -136,7 +136,7 @@ export default function Sidebar({ userName }: { userName: string }) {
   const topLevelPages = pages.filter(p => p.parent_id === null)
 
   return (
-    <aside className="w-60 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
+    <aside className="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
       <div className="p-3 border-b border-gray-200">
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
           <div className="w-6 h-6 bg-gray-900 rounded text-white text-xs flex items-center justify-center font-bold">W</div>
