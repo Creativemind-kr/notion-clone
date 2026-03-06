@@ -40,12 +40,16 @@ export default function Sidebar({ userName }: { userName: string }) {
   }, [fetchPages, supabase])
 
   const createPage = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('pages')
       .insert({ title: '제목 없음', content: '', author_name: userName })
       .select()
       .single()
 
+    if (error) {
+      alert('오류: ' + error.message)
+      return
+    }
     if (data) {
       router.push(`/dashboard/page/${data.id}`)
     }
