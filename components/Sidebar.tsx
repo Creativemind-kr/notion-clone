@@ -92,7 +92,7 @@ function PageItem({
   )
 }
 
-export default function Sidebar({ userName }: { userName: string }) {
+export default function Sidebar({ userName, isOpen, onClose }: { userName: string; isOpen: boolean; onClose: () => void }) {
   const [pages, setPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -115,6 +115,11 @@ export default function Sidebar({ userName }: { userName: string }) {
     return () => clearInterval(interval)
   }, [fetchPages])
 
+  const navigate = (id: string) => {
+    router.push(`/dashboard/page/${id}`)
+    onClose()
+  }
+
   const createPage = async (parentId: string | null = null) => {
     const { data, error } = await supabase
       .from('pages')
@@ -136,7 +141,7 @@ export default function Sidebar({ userName }: { userName: string }) {
   const topLevelPages = pages.filter(p => p.parent_id === null)
 
   return (
-    <aside className="w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
+    <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="p-3 border-b border-gray-200">
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
           <div className="w-6 h-6 bg-gray-900 rounded text-white text-xs flex items-center justify-center font-bold">W</div>
@@ -168,7 +173,7 @@ export default function Sidebar({ userName }: { userName: string }) {
               allPages={pages}
               depth={0}
               pathname={pathname}
-              onNavigate={(id) => router.push(`/dashboard/page/${id}`)}
+              onNavigate={(id) => navigate(id)}
               onCreateChild={(parentId) => createPage(parentId)}
               onDelete={deletePage}
             />
