@@ -1,20 +1,47 @@
-export const dynamic = 'force-dynamic'
+'use client'
 
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
+import { User } from '@supabase/supabase-js'
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const supabase = createClient()
 
-  if (!user) {
-    redirect('/login')
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace('/login')
+      } else {
+        setUser(session.user)
+      }
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/login')
+      } else {
+        setUser(session.user)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [router, supabase])
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center text-gray-400 text-sm">
+        불러오는 중...
+      </div>
+    )
   }
+
+  if (!user) return null
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
