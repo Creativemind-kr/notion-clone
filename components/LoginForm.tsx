@@ -24,7 +24,7 @@ export default function LoginForm() {
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="text-3xl mb-2">📝</div>
-          <h1 className="text-2xl font-bold text-gray-900">우리 팀 워크스페이스</h1>
+          <h1 className="text-2xl font-bold text-gray-900">스브스 전용 메모장★</h1>
           <p className="text-gray-500 mt-1 text-sm">이름을 입력하고 시작하세요</p>
         </div>
 
