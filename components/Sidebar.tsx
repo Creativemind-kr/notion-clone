@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { User } from '@supabase/supabase-js'
 import { FileText, Plus, Trash2, LogOut, ChevronDown } from 'lucide-react'
 
 interface Page {
@@ -12,7 +11,7 @@ interface Page {
   created_at: string
 }
 
-export default function Sidebar({ user }: { user: User }) {
+export default function Sidebar({ userName }: { userName: string }) {
   const [pages, setPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -31,7 +30,6 @@ export default function Sidebar({ user }: { user: User }) {
   useEffect(() => {
     fetchPages()
 
-    // 실시간 업데이트
     const channel = supabase
       .channel('pages-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pages' }, fetchPages)
@@ -43,7 +41,7 @@ export default function Sidebar({ user }: { user: User }) {
   const createPage = async () => {
     const { data } = await supabase
       .from('pages')
-      .insert({ title: '제목 없음', content: '', created_by: user.id })
+      .insert({ title: '제목 없음', content: '', author_name: userName })
       .select()
       .single()
 
@@ -54,25 +52,20 @@ export default function Sidebar({ user }: { user: User }) {
 
   const deletePage = async (e: React.MouseEvent, pageId: string) => {
     e.stopPropagation()
-    e.preventDefault()
     if (!confirm('이 페이지를 삭제할까요?')) return
-
     await supabase.from('pages').delete().eq('id', pageId)
-
     if (pathname === `/dashboard/page/${pageId}`) {
       router.push('/dashboard')
     }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
+  const handleLogout = () => {
+    localStorage.removeItem('workspace_user')
+    window.location.href = '/login'
   }
 
   return (
     <aside className="w-60 bg-gray-50 border-r border-gray-200 flex flex-col h-full">
-      {/* 워크스페이스 헤더 */}
       <div className="p-3 border-b border-gray-200">
         <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-200 transition-colors text-left">
           <div className="w-6 h-6 bg-gray-900 rounded text-white text-xs flex items-center justify-center font-bold">
@@ -83,7 +76,6 @@ export default function Sidebar({ user }: { user: User }) {
         </button>
       </div>
 
-      {/* 페이지 목록 */}
       <div className="flex-1 overflow-y-auto py-2">
         <div className="px-3 mb-1 flex items-center justify-between">
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">페이지</span>
@@ -125,17 +117,16 @@ export default function Sidebar({ user }: { user: User }) {
         )}
       </div>
 
-      {/* 하단 유저 정보 */}
       <div className="p-3 border-t border-gray-200">
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
           <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-medium">
-            {user.email?.[0].toUpperCase()}
+            {userName[0]}
           </div>
-          <span className="text-xs text-gray-600 flex-1 truncate">{user.email}</span>
+          <span className="text-xs text-gray-600 flex-1 truncate">{userName}</span>
           <button
             onClick={handleLogout}
             className="text-gray-400 hover:text-gray-700 transition-colors"
-            title="로그아웃"
+            title="나가기"
           >
             <LogOut size={14} />
           </button>
