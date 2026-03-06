@@ -30,14 +30,9 @@ export default function Sidebar({ userName }: { userName: string }) {
 
   useEffect(() => {
     fetchPages()
-
-    const channel = supabase
-      .channel('pages-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pages', filter: `author_name=eq.${userName}` }, fetchPages)
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchPages, supabase])
+    const interval = setInterval(fetchPages, 2000)
+    return () => clearInterval(interval)
+  }, [fetchPages])
 
   const createPage = async () => {
     const { data, error } = await supabase
