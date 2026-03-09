@@ -184,7 +184,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <select
           onFocus={saveSelection}
           onChange={(e) => applyWithSelection(() => editor.chain().focus().setFontFamily(e.target.value).run())}
-          className="text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
+          className="text-sm border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
           title="글꼴"
         >
           {FONTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -194,7 +194,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <select
           onFocus={saveSelection}
           onChange={(e) => applyWithSelection(() => editor.chain().focus().setFontSize(e.target.value).run())}
-          className="text-xs border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
+          className="text-sm border border-gray-200 rounded px-1.5 py-1 text-gray-600 bg-white cursor-pointer mr-1"
           title="글자 크기"
         >
           {FONT_SIZES.map(s => <option key={s} value={s}>{s.replace('px', '')}</option>)}

@@ -131,7 +131,7 @@ export default function CalendarView({ userName }: { userName: string }) {
       {/* 요일 헤더 */}
       <div className="grid grid-cols-7 border-b border-gray-100">
         {DAY_NAMES.map((d, i) => (
-          <div key={d} className={`py-2 text-center text-xs font-medium ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
+          <div key={d} className={`py-2 text-center text-sm font-medium ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
             {d}
           </div>
         ))}
@@ -171,7 +171,7 @@ export default function CalendarView({ userName }: { userName: string }) {
                 </div>
 
                 {holiday && (
-                  <div className="text-xs text-red-400 truncate leading-tight mb-0.5">{holiday}</div>
+                  <div className="text-[11px] text-red-400 truncate leading-tight mb-0.5">{holiday}</div>
                 )}
 
                 <div className="space-y-0.5">
@@ -184,8 +184,8 @@ export default function CalendarView({ userName }: { userName: string }) {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          {event.time && <span className="text-xs shrink-0" style={{ color: event.color }}>{event.time}</span>}
-                          <span className="text-xs truncate" style={{ color: event.color }}>{event.title}</span>
+                          {event.time && <span className="text-[11px] shrink-0" style={{ color: event.color }}>{event.time}</span>}
+                          <span className="text-[12px] truncate" style={{ color: event.color }}>{event.title}</span>
                         </div>
                       </div>
                       <button

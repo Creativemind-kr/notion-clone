@@ -53,8 +53,8 @@ function PageItem({
           }
         </button>
 
-        <FileText size={13} className="shrink-0 text-gray-400" />
-        <span className="text-sm truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
+        <FileText size={14} className="shrink-0 text-gray-400" />
+        <span className="text-[14px] truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
           <button
@@ -241,7 +241,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         </button>
 
         <div className="px-3 mb-1 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">페이지</span>
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">페이지</span>
           <button
             onClick={() => createPage(null)}
             className="text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded p-0.5 transition-colors"
@@ -323,7 +323,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-medium">
             {userName[0]}
           </div>
-          <span className="text-xs text-gray-600 flex-1 truncate">{userName}</span>
+          <span className="text-sm text-gray-600 flex-1 truncate">{userName}</span>
           <button onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }} className="text-gray-400 hover:text-gray-700" title="나가기">
             <LogOut size={14} />
           </button>
