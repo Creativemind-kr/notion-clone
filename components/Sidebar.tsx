@@ -248,6 +248,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   const orderMapRef = useRef<Record<string, string[]>>({})
   const pagesRef = useRef<Page[]>([])
+  const sortedPagesRef = useRef<Page[]>([])
   pagesRef.current = pages
   orderMapRef.current = orderMap
 
@@ -456,40 +457,34 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     }
   }, [])
 
-  const getSortedLevelIds = useCallback((parentId: string | null) => {
-    const key = parentId ?? 'root'
-    const levelIds = pagesRef.current.filter(p => p.parent_id === parentId).map(p => p.id)
-    const order = orderMapRef.current[key] ?? []
-    return [...levelIds].sort((a, b) => {
-      const ai = order.indexOf(a), bi = order.indexOf(b)
-      if (ai === -1 && bi === -1) return 0; if (ai === -1) return 1; if (bi === -1) return -1
-      return ai - bi
-    })
-  }, [])
-
   const handleMoveUp = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    const sorted = getSortedLevelIds(parentId)
-    const idx = sorted.indexOf(id)
+    // 화면에 실제로 표시된 순서를 그대로 사용
+    const levelIds = sortedPagesRef.current
+      .filter(p => p.parent_id === parentId)
+      .map(p => p.id)
+    const idx = levelIds.indexOf(id)
     if (idx <= 0) return
-    const newOrder = [...sorted]
+    const newOrder = [...levelIds]
     ;[newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]
     const newMap = { ...orderMapRef.current, [key]: newOrder }
     setOrderMap(newMap); orderMapRef.current = newMap
     localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName, getSortedLevelIds])
+  }, [userName])
 
   const handleMoveDown = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    const sorted = getSortedLevelIds(parentId)
-    const idx = sorted.indexOf(id)
-    if (idx < 0 || idx >= sorted.length - 1) return
-    const newOrder = [...sorted]
+    const levelIds = sortedPagesRef.current
+      .filter(p => p.parent_id === parentId)
+      .map(p => p.id)
+    const idx = levelIds.indexOf(id)
+    if (idx < 0 || idx >= levelIds.length - 1) return
+    const newOrder = [...levelIds]
     ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
     const newMap = { ...orderMapRef.current, [key]: newOrder }
     setOrderMap(newMap); orderMapRef.current = newMap
     localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName, getSortedLevelIds])
+  }, [userName])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
@@ -538,6 +533,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     if (bi === -1) return -1
     return ai - bi
   })
+  // 항상 최신 정렬 상태를 ref에 반영 (handleMoveUp/Down에서 사용)
+  sortedPagesRef.current = sortedPages
 
   const topLevelPages = sortedPages.filter(p => p.parent_id === null)
 
