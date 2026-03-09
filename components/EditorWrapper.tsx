@@ -290,7 +290,26 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <div className="w-px h-5 bg-gray-200 mx-0.5" />
 
         <button
-          onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setDetails().run() }}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            const { state, chain } = editor
+            const { $from } = state.selection
+            const depth = $from.depth
+            const parentPos = $from.before(depth)
+            const parentNode = $from.node(depth)
+            const parentEnd = parentPos + parentNode.nodeSize
+            const inlineContent = parentNode.content.toJSON() || []
+            chain().focus().insertContentAt(
+              { from: parentPos, to: parentEnd },
+              {
+                type: 'details',
+                content: [
+                  { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
+                  { type: 'detailsContent', content: [{ type: 'paragraph' }] },
+                ],
+              }
+            ).run()
+          }}
           title="접기 블록"
           className={`p-1.5 rounded transition-colors flex items-center gap-0.5 ${editor.isActive('details') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}
         >
@@ -435,7 +454,26 @@ export default function EditorWrapper({ page }: { page: Page }) {
           {/* 접기 */}
           <div className="px-3">
             <button
-              onClick={() => { editor.chain().focus().setDetails().run(); setCtxMenu(null) }}
+              onClick={() => {
+                const { state, chain } = editor
+                const { $from } = state.selection
+                const depth = $from.depth
+                const parentPos = $from.before(depth)
+                const parentNode = $from.node(depth)
+                const parentEnd = parentPos + parentNode.nodeSize
+                const inlineContent = parentNode.content.toJSON() || []
+                chain().focus().insertContentAt(
+                  { from: parentPos, to: parentEnd },
+                  {
+                    type: 'details',
+                    content: [
+                      { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
+                      { type: 'detailsContent', content: [{ type: 'paragraph' }] },
+                    ],
+                  }
+                ).run()
+                setCtxMenu(null)
+              }}
               className="w-full flex items-center gap-2 py-1 text-sm text-gray-700 hover:text-gray-900"
             >
               <ChevronDown size={14} />

@@ -180,42 +180,68 @@ body {
 }
 
 /* 접기 블록 */
-.tiptap details {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin: 0.5em 0;
-  overflow: hidden;
+.tiptap [data-type="details"] {
+  display: flex;
+  gap: 0.2em;
+  align-items: flex-start;
+  margin: 0.2em 0;
 }
 
-.tiptap details summary {
-  padding: 0.6em 1em;
-  cursor: pointer;
-  font-weight: 600;
-  background: #f9fafb;
-  list-style: none;
+/* 토글 버튼 (▶ 화살표) */
+.tiptap [data-type="details"] > button {
   display: flex;
   align-items: center;
-  gap: 0.5em;
-  user-select: none;
-}
-
-.tiptap details summary::-webkit-details-marker {
-  display: none;
-}
-
-.tiptap details summary::before {
-  content: '▶';
-  font-size: 0.65em;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.5em;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
   color: #9ca3af;
-  transition: transform 0.2s;
-  display: inline-block;
+  font-size: 0.65em;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  margin-top: 0.25em;
 }
 
-.tiptap details[open] summary::before {
+.tiptap [data-type="details"] > button::before {
+  content: '▶';
+}
+
+.tiptap [data-type="details"].is-open > button {
   transform: rotate(90deg);
 }
 
-.tiptap details > div {
-  padding: 0.75em 1em;
-  border-top: 1px solid #e5e7eb;
+/* 요약+내용 감싸는 div */
+.tiptap [data-type="details"] > div {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 요약 텍스트 */
+.tiptap [data-type="details"] summary {
+  display: block;
+  cursor: text;
+  font-weight: 500;
+  list-style: none;
+  padding: 0;
+  background: none;
+  line-height: 1.75;
+  outline: none;
+}
+
+.tiptap [data-type="details"] summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 접힌 내용 영역 */
+[data-type="detailsContent"] {
+  padding-left: 0.75em;
+  border-left: 2px solid #e5e7eb;
+  margin-top: 0.15em;
+}
+
+[data-type="detailsContent"][hidden] {
+  display: none !important;
 }
