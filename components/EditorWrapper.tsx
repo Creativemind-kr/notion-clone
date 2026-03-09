@@ -86,7 +86,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; anchor: number } | null>(null)
   const [linkPopup, setLinkPopup] = useState<{ href: string; x: number; y: number } | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [imageModal, setImageModal] = useState<{ src: string } | null>(null)
+  const [imageModal, setImageModal] = useState<{ src: string; scale: number } | null>(null)
   const [imgCtxMenu, setImgCtxMenu] = useState<{ x: number; y: number; src: string } | null>(null)
   const [imgCopied, setImgCopied] = useState(false)
   const [docLinks, setDocLinks] = useState<string[]>([])
@@ -247,12 +247,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
         fetchedUrls.current.add(url)
         try {
           const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
-          if (res.ok) {
-            const data: OgPreview = await res.json()
-            if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: data }))
-          }
+          const data: OgPreview = res.ok ? await res.json() : { url }
+          if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: data }))
         } catch {
-          // 패치 실패 시 기본값
           if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: { url } }))
         }
       })
@@ -297,7 +294,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const handleEditorClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
     if (target.tagName === 'IMG') {
-      setImageModal({ src: (target as HTMLImageElement).src })
+      setImageModal({ src: (target as HTMLImageElement).src, scale: 1 })
       return
     }
     setShowColorPicker(false)
@@ -327,7 +324,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
   if (!editor) return null
 
-  const previewLinks = docLinks.filter(u => linkPreviews[u])
+  const previewLinks = docLinks
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -475,6 +472,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
               <div className="space-y-2">
                 {previewLinks.map((url) => {
                   const p = linkPreviews[url]
+                  if (!p) return (
+                    <div key={url} className="bg-white border border-slate-100 rounded-xl p-2.5 animate-pulse">
+                      <div className="h-3 bg-slate-100 rounded w-3/4 mb-1.5" />
+                      <div className="h-2.5 bg-slate-100 rounded w-full" />
+                    </div>
+                  )
                   return (
                     <a
                       key={url}
@@ -530,6 +533,13 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setImageModal(null)}
+          onWheel={(e) => {
+            e.preventDefault()
+            setImageModal(prev => prev
+              ? { ...prev, scale: Math.max(0.2, Math.min(10, prev.scale * (e.deltaY > 0 ? 0.92 : 1.08))) }
+              : null
+            )
+          }}
         >
           <button
             className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors"
@@ -537,10 +547,24 @@ export default function EditorWrapper({ page }: { page: Page }) {
           >
             <X size={20} />
           </button>
+          {imageModal.scale !== 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              <span className="text-white/60 text-xs bg-black/40 px-2 py-1 rounded-lg">
+                {Math.round(imageModal.scale * 100)}%
+              </span>
+              <button
+                className="text-white/60 hover:text-white text-xs bg-black/40 px-2 py-1 rounded-lg"
+                onClick={(e) => { e.stopPropagation(); setImageModal(prev => prev ? { ...prev, scale: 1 } : null) }}
+              >
+                초기화
+              </button>
+            </div>
+          )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageModal.src}
             alt=""
+            style={{ transform: `scale(${imageModal.scale})`, transformOrigin: 'center' }}
             className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
@@ -556,7 +580,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            onClick={() => { setImageModal({ src: imgCtxMenu.src }); setImgCtxMenu(null) }}
+            onClick={() => { setImageModal({ src: imgCtxMenu.src, scale: 1 }); setImgCtxMenu(null) }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
           >
             <ZoomIn size={13} className="text-gray-400" />

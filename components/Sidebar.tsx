@@ -338,7 +338,18 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           setTrashedPages(prev => prev.filter(p => p.id !== updated.id))
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pages' }, () => fetchPages())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pages' }, (payload) => {
+        const newPage = payload.new as Page
+        if (newPage.deleted_at) return
+        setPages(prev => {
+          if (prev.find(p => p.id === newPage.id)) return prev // createPage가 이미 추가
+          return [...prev, newPage]
+        })
+        const key = newPage.parent_id ?? 'root'
+        if (!(orderMapRef.current[key] ?? []).includes(newPage.id)) {
+          saveOrderMap({ ...orderMapRef.current, [key]: [...(orderMapRef.current[key] ?? []), newPage.id] })
+        }
+      })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'pages' }, () => fetchPages())
       .subscribe()
     return () => { client.removeChannel(channel) }
