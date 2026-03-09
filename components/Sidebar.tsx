@@ -406,16 +406,15 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       const oldKey = sourcePage.parent_id ?? 'root'
       const newKey = targetId
 
-      // Update local state
+      // Update local state + order map immediately (UI 즉시 반영)
       setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
-      // Update DB
-      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
-
-      // Update order map: remove from old parent, append to new parent
       const newMap = { ...orderMapRef.current }
       newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
       newMap[newKey] = [...(newMap[newKey] ?? []), sourceId]
       saveOrderMap(newMap)
+
+      // Update DB (await는 UI 반영 후)
+      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
 
     } else {
       // before / after: reorder at same level, or reparent + reorder
@@ -428,7 +427,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
       if (oldParentId !== newParentId) {
         setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
-        await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
       }
 
       // Use the exact visual order from sortedPagesRef (same as what handleMoveUp/Down uses)
@@ -445,7 +443,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       if (oldKey !== newKey) {
         newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
       }
+      // order map 먼저 저장 (UI 즉시 반영)
       saveOrderMap(newMap)
+
+      // DB 업데이트는 그 다음 (reparenting인 경우만)
+      if (oldParentId !== newParentId) {
+        await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
+      }
     }
   }, [saveOrderMap])
 
