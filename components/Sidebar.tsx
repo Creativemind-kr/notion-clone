@@ -1,6 +1,33 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
+
+  return (
+    <div
+      className="relative flex-1 min-w-0"
+      onMouseEnter={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        setPos({ x: rect.left, y: rect.bottom + 4 })
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[9999] bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg pointer-events-none"
+          style={{ left: pos.x, top: pos.y }}
+        >
+          {text}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar } from 'lucide-react'
@@ -54,12 +81,9 @@ function PageItem({
         </button>
 
         <FileText size={14} className="shrink-0 text-gray-400" />
-        <div className="group/tip relative flex-1 min-w-0">
+        <Tooltip text={page.title || '제목 없음'}>
           <span className="text-[13px] truncate block">{page.title || '제목 없음'}</span>
-          <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
-            <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{page.title || '제목 없음'}</div>
-          </div>
-        </div>
+        </Tooltip>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
           <button
@@ -242,12 +266,9 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           style={{ width: 'calc(100% - 8px)' }}
         >
           <Calendar size={14} />
-          <div className="group/tip relative flex-1 min-w-0">
+          <Tooltip text={`${userName}의 캘린더`}>
             <span className="truncate block">{userName}의 캘린더</span>
-            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
-              <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{userName}의 캘린더</div>
-            </div>
-          </div>
+          </Tooltip>
         </button>
 
         <div className="px-3 mb-1 mt-2 flex items-center justify-between">
@@ -302,12 +323,9 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
                 trashedPages.map(page => (
                   <div key={page.id} className="group flex items-center gap-1 py-1 mx-1 px-2 rounded-lg text-gray-400">
                     <FileText size={12} className="shrink-0" />
-                    <div className="group/tip relative flex-1 min-w-0">
+                    <Tooltip text={page.title || '제목 없음'}>
                       <span className="text-[13px] truncate block">{page.title || '제목 없음'}</span>
-                      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
-                        <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{page.title || '제목 없음'}</div>
-                      </div>
-                    </div>
+                    </Tooltip>
                     <span className="text-xs text-gray-300 shrink-0">{daysLeft(page.deleted_at!)}일</span>
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
                       <button
@@ -338,12 +356,9 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-medium">
             {userName[0]}
           </div>
-          <div className="group/tip relative flex-1 min-w-0">
+          <Tooltip text={userName}>
             <span className="text-sm text-gray-600 truncate block">{userName}</span>
-            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
-              <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{userName}</div>
-            </div>
-          </div>
+          </Tooltip>
           <button onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }} className="text-gray-400 hover:text-gray-700" title="나가기">
             <LogOut size={14} />
           </button>
