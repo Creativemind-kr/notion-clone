@@ -22,27 +22,35 @@ const commands = [
     const url = prompt('이미지 URL을 입력하세요:')
     if (url) editor.chain().focus().setImage({ src: url }).run()
   }},
-  { title: '캘린더', desc: '이번 달 일정 불러오기', icon: '📅', action: async (editor: Editor) => {
+  { title: '캘린더 (주차별)', desc: '이번 주 남은 일정', icon: '📅', action: async (editor: Editor) => {
     const userName = localStorage.getItem('workspace_user')
     if (!userName) return
 
     const supabase = createClient()
     const today = new Date()
-    const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-    const to = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
+    today.setHours(0, 0, 0, 0)
+
+    // 이번 주 일요일~토요일 범위
+    const dayOfWeek = today.getDay()
+    const sunday = new Date(today); sunday.setDate(today.getDate() - dayOfWeek)
+    const saturday = new Date(today); saturday.setDate(today.getDate() + (6 - dayOfWeek))
+
+    const todayStr = today.toISOString().slice(0, 10)
+    const satStr = saturday.toISOString().slice(0, 10)
 
     const { data } = await supabase
       .from('events')
       .select('*')
       .eq('author_name', userName)
-      .gte('date', from)
-      .lt('date', to)
+      .gte('date', todayStr)
+      .lte('date', satStr)
       .order('date')
       .order('time')
 
+    const weekLabel = `${sunday.getMonth() + 1}/${sunday.getDate()} ~ ${saturday.getMonth() + 1}/${saturday.getDate()}`
+
     if (!data || data.length === 0) {
-      editor.chain().focus().insertContent('<p>📅 이번 달 일정이 없어요.</p>').run()
+      editor.chain().focus().insertContent(`<p>📅 이번 주 (${weekLabel}) 남은 일정이 없어요.</p>`).run()
       return
     }
 
@@ -53,8 +61,58 @@ const commands = [
     }).join('')
 
     editor.chain().focus().insertContent(
-      `<p><strong>📅 ${today.getFullYear()}년 ${today.getMonth() + 1}월 일정</strong></p><ul>${rows}</ul>`
+      `<p><strong>📅 이번 주 일정 (${weekLabel})</strong></p><ul>${rows}</ul>`
     ).run()
+  }},
+  { title: '캘린더 (이번달)', desc: '이번 달 남은 일정 전체', icon: '🗓️', action: async (editor: Editor) => {
+    const userName = localStorage.getItem('workspace_user')
+    if (!userName) return
+
+    const supabase = createClient()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const todayStr = today.toISOString().slice(0, 10)
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    const to = nextMonth.toISOString().slice(0, 10)
+
+    const { data } = await supabase
+      .from('events')
+      .select('*')
+      .eq('author_name', userName)
+      .gte('date', todayStr)
+      .lt('date', to)
+      .order('date')
+      .order('time')
+
+    if (!data || data.length === 0) {
+      editor.chain().focus().insertContent(`<p>🗓️ 이번 달 남은 일정이 없어요.</p>`).run()
+      return
+    }
+
+    // 주차별로 그룹핑
+    const weeks: Record<string, typeof data> = {}
+    data.forEach(e => {
+      const d = new Date(e.date)
+      const sun = new Date(d); sun.setDate(d.getDate() - d.getDay())
+      const sat = new Date(d); sat.setDate(d.getDate() + (6 - d.getDay()))
+      const key = `${sun.getMonth() + 1}/${sun.getDate()} ~ ${sat.getMonth() + 1}/${sat.getDate()}`
+      if (!weeks[key]) weeks[key] = []
+      weeks[key].push(e)
+    })
+
+    let html = `<p><strong>🗓️ ${today.getFullYear()}년 ${today.getMonth() + 1}월 일정</strong></p>`
+    for (const [week, items] of Object.entries(weeks)) {
+      html += `<p><strong>${week}</strong></p><ul>`
+      items.forEach(e => {
+        const time = e.time ? ` ${e.time}` : ''
+        const desc = e.description ? ` — ${e.description}` : ''
+        html += `<li><strong>${e.date}${time}</strong> ${e.title}${desc}</li>`
+      })
+      html += '</ul>'
+    }
+
+    editor.chain().focus().insertContent(html).run()
   }},
 ]
 
