@@ -387,7 +387,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setDragOver(prev => (prev?.id === id && prev?.zone === zone ? prev : { id, zone }))
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent, targetId: string, zone: DropZone) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, targetId: string, zone: DropZone) => {
     e.preventDefault()
     const sourceId = e.dataTransfer.getData('text/plain')
     setDragId(null)
@@ -409,7 +409,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       // Update local state
       setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
       // Update DB
-      supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
+      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
 
       // Update order map: remove from old parent, append to new parent
       const newMap = { ...orderMapRef.current }
@@ -428,7 +428,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
       if (oldParentId !== newParentId) {
         setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
-        supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
+        await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
       }
 
       // Use the exact visual order from sortedPagesRef (same as what handleMoveUp/Down uses)
@@ -613,7 +613,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         ) : (
           <div
             onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               // Drop on empty area below all pages → move to top level, last position
               const sourceId = e.dataTransfer.getData('text/plain')
               if (!sourceId) return
@@ -621,7 +621,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
               const sourcePage = pages.find(p => p.id === sourceId)
               if (!sourcePage || sourcePage.parent_id === null) return
               setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: null } : p))
-              supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
+              await supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
               const newMap = { ...orderMapRef.current }
               const oldKey = sourcePage.parent_id ?? 'root'
               newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
