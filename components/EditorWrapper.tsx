@@ -342,7 +342,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
           setCtxMenu({ x, y, anchor: editor.state.selection.anchor })
         }}
       >
-        <div className="max-w-3xl mx-auto px-10 py-12">
+        <div className="max-w-5xl mx-auto px-8 py-12">
           <input
             type="text"
             value={title}

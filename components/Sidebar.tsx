@@ -30,7 +30,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar } from 'lucide-react'
+import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
 
 interface Page {
   id: string
@@ -42,26 +42,52 @@ interface Page {
 
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
+  dragId, dragOverId, onDragStart, onDragOver, onDrop, onDragEnd,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
   onDelete: (e: React.MouseEvent, id: string) => void
+  dragId?: string | null; dragOverId?: string | null
+  onDragStart?: (e: React.DragEvent, id: string) => void
+  onDragOver?: (e: React.DragEvent, id: string) => void
+  onDrop?: (e: React.DragEvent, id: string) => void
+  onDragEnd?: () => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const children = allPages.filter(p => p.parent_id === page.id)
   const isActive = pathname === `/dashboard/page/${page.id}`
+  const isDragging = dragId === page.id
+  const isDragOver = dragOverId === page.id && dragId !== page.id
 
   return (
     <div>
       <div
+        draggable={depth === 0}
+        onDragStart={depth === 0 ? (e) => onDragStart?.(e, page.id) : undefined}
+        onDragOver={depth === 0 ? (e) => onDragOver?.(e, page.id) : undefined}
+        onDrop={depth === 0 ? (e) => onDrop?.(e, page.id) : undefined}
+        onDragEnd={depth === 0 ? onDragEnd : undefined}
         onClick={() => onNavigate(page.id)}
         className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 ${
-          isActive
+          isDragging
+            ? 'opacity-40'
+            : isDragOver
+            ? 'bg-blue-50 ring-2 ring-blue-300'
+            : isActive
             ? 'bg-slate-900 text-white'
             : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
         }`}
         style={{ paddingLeft: `${0.6 + depth * 1}rem` }}
       >
+        {depth === 0 && (
+          <span
+            className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <GripVertical size={11} />
+          </span>
+        )}
+
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
           className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'}`}
@@ -96,7 +122,9 @@ function PageItem({
 
       {expanded && children.map(child => (
         <PageItem key={child.id} page={child} allPages={allPages} depth={depth + 1}
-          pathname={pathname} onNavigate={onNavigate} onCreateChild={onCreateChild} onDelete={onDelete} />
+          pathname={pathname} onNavigate={onNavigate} onCreateChild={onCreateChild} onDelete={onDelete}
+          dragId={dragId} dragOverId={dragOverId}
+          onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd} />
       ))}
     </div>
   )
@@ -111,9 +139,25 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const [trashedPages, setTrashedPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const [trashOpen, setTrashOpen] = useState(false)
+  const [pageOrder, setPageOrder] = useState<string[]>([])
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const pageOrderRef = useRef<string[]>([])
+  const sortedPagesRef = useRef<Page[]>([])
   const router = useRouter()
   const pathname = usePathname()
   const supabase = useRef(createClient())
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`page-order-${userName}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        setPageOrder(parsed)
+        pageOrderRef.current = parsed
+      }
+    } catch {}
+  }, [userName])
 
   const fetchPages = useCallback(async () => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
@@ -156,6 +200,49 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     return () => { client.removeChannel(channel) }
   }, [fetchPages, userName])
 
+  const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+    setDragId(id)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverId(id)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    const sourceId = e.dataTransfer.getData('text/plain')
+    setDragId(null)
+    setDragOverId(null)
+    if (!sourceId || sourceId === targetId) return
+
+    const currentOrder = pageOrderRef.current
+    const currentPages = sortedPagesRef.current
+    const ids = currentPages.map(p => p.id)
+
+    const fromIdx = ids.indexOf(sourceId)
+    const toIdx = ids.indexOf(targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const newIds = [...ids]
+    newIds.splice(fromIdx, 1)
+    newIds.splice(toIdx, 0, sourceId)
+
+    // include any ids in current order that aren't in top-level (shouldn't happen but safe)
+    const merged = [...newIds, ...currentOrder.filter(id => !newIds.includes(id))]
+    setPageOrder(merged)
+    pageOrderRef.current = merged
+    localStorage.setItem(`page-order-${userName}`, JSON.stringify(merged))
+  }, [userName])
+
+  const handleDragEnd = useCallback(() => {
+    setDragId(null)
+    setDragOverId(null)
+  }, [])
+
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
   const createPage = async (parentId: string | null = null) => {
@@ -192,9 +279,20 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   }
 
   const topLevelPages = pages.filter(p => p.parent_id === null)
+  const sortedTopLevelPages = [...topLevelPages].sort((a, b) => {
+    const ai = pageOrder.indexOf(a.id)
+    const bi = pageOrder.indexOf(b.id)
+    if (ai === -1 && bi === -1) return 0
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+
+  // keep ref in sync for use inside drag handlers
+  sortedPagesRef.current = sortedTopLevelPages
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-100 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+    <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-100 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
 
       <div className="px-4 py-4 border-b border-slate-100">
         <div className="flex items-center gap-2.5 px-1">
@@ -235,10 +333,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
             <button onClick={() => createPage(null)} className="mt-1 text-slate-600 hover:text-slate-900 underline underline-offset-2">새 페이지 만들기</button>
           </div>
         ) : (
-          topLevelPages.map(page => (
+          sortedTopLevelPages.map(page => (
             <PageItem key={page.id} page={page} allPages={pages} depth={0}
               pathname={pathname} onNavigate={navigate}
-              onCreateChild={(parentId) => createPage(parentId)} onDelete={deletePage} />
+              onCreateChild={(parentId) => createPage(parentId)} onDelete={deletePage}
+              dragId={dragId} dragOverId={dragOverId}
+              onDragStart={handleDragStart} onDragOver={handleDragOver}
+              onDrop={handleDrop} onDragEnd={handleDragEnd} />
           ))
         )}
 
