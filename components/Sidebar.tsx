@@ -385,48 +385,30 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       saveOrderMap(newMap)
 
     } else {
-      // before / after: move source to same level as target
+      // before / after: reorder at same level, or reparent + reorder
       const newParentId = targetPage.parent_id
       const oldParentId = sourcePage.parent_id
       const newKey = newParentId ?? 'root'
       const oldKey = oldParentId ?? 'root'
 
-      // Prevent circular (e.g. dragging parent before one of its descendants)
-      if (newParentId && isDescendant(sourceId, newParentId, pages)) return
-
-      // Pages at target level (including source after reparent)
-      const updatedPages = oldParentId !== newParentId
-        ? pages.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p)
-        : pages
+      if (newParentId !== null && isDescendant(sourceId, newParentId, pages)) return
 
       if (oldParentId !== newParentId) {
-        setPages(updatedPages)
+        setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
         supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
       }
 
-      // Compute sorted IDs for the target level
-      const levelIds = updatedPages
-        .filter(p => p.parent_id === newParentId)
+      // Use the exact visual order from sortedPagesRef (same as what handleMoveUp/Down uses)
+      const levelIds = sortedPagesRef.current
+        .filter(p => p.parent_id === newParentId && p.id !== sourceId)
         .map(p => p.id)
 
-      const currentOrder = orderMapRef.current[newKey] ?? []
-      const sortedIds = [...levelIds].sort((a, b) => {
-        const ai = currentOrder.indexOf(a)
-        const bi = currentOrder.indexOf(b)
-        if (ai === -1 && bi === -1) return 0
-        if (ai === -1) return 1
-        if (bi === -1) return -1
-        return ai - bi
-      })
-
-      // Re-insert source before/after target
-      const withoutSource = sortedIds.filter(id => id !== sourceId)
-      const targetIdx = withoutSource.indexOf(targetId)
-      const insertAt = zone === 'before' ? targetIdx : targetIdx + 1
-      withoutSource.splice(Math.max(0, insertAt), 0, sourceId)
+      const targetIdx = levelIds.indexOf(targetId)
+      const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
+      levelIds.splice(insertAt, 0, sourceId)
 
       const newMap = { ...orderMapRef.current }
-      newMap[newKey] = withoutSource
+      newMap[newKey] = levelIds
       if (oldKey !== newKey) {
         newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
       }
@@ -459,7 +441,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   const handleMoveUp = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    // 화면에 실제로 표시된 순서를 그대로 사용
     const levelIds = sortedPagesRef.current
       .filter(p => p.parent_id === parentId)
       .map(p => p.id)
@@ -467,10 +448,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     if (idx <= 0) return
     const newOrder = [...levelIds]
     ;[newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]
-    const newMap = { ...orderMapRef.current, [key]: newOrder }
-    setOrderMap(newMap); orderMapRef.current = newMap
-    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName])
+    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
+  }, [saveOrderMap])
 
   const handleMoveDown = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
@@ -481,10 +460,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     if (idx < 0 || idx >= levelIds.length - 1) return
     const newOrder = [...levelIds]
     ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
-    const newMap = { ...orderMapRef.current, [key]: newOrder }
-    setOrderMap(newMap); orderMapRef.current = newMap
-    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName])
+    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
+  }, [saveOrderMap])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
