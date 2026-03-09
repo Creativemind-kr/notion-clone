@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter, usePathname } from 'next/navigation'
+import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -28,10 +31,6 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
   )
 }
 
-import { createClient } from '@/lib/supabase/client'
-import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
-
 interface Page {
   id: string
   title: string
@@ -40,54 +39,90 @@ interface Page {
   deleted_at?: string | null
 }
 
+type DropZone = 'before' | 'into' | 'after'
+interface DragOverState { id: string; zone: DropZone }
+
+function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolean {
+  let current = pages.find(p => p.id === nodeId)
+  while (current?.parent_id) {
+    if (current.parent_id === ancestorId) return true
+    current = pages.find(p => p.id === current!.parent_id)
+  }
+  return false
+}
+
+function getZone(e: React.DragEvent): DropZone {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const y = e.clientY - rect.top
+  if (y < rect.height * 0.28) return 'before'
+  if (y > rect.height * 0.72) return 'after'
+  return 'into'
+}
+
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
-  dragId, dragOverId, onDragStart, onDragOver, onDrop, onDragEnd,
+  dragId, dragOver, onDragStart, onDragOver, onDrop, onDragEnd,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
   onDelete: (e: React.MouseEvent, id: string) => void
-  dragId?: string | null; dragOverId?: string | null
-  onDragStart?: (e: React.DragEvent, id: string) => void
-  onDragOver?: (e: React.DragEvent, id: string) => void
-  onDrop?: (e: React.DragEvent, id: string) => void
-  onDragEnd?: () => void
+  dragId: string | null; dragOver: DragOverState | null
+  onDragStart: (e: React.DragEvent, id: string) => void
+  onDragOver: (id: string, zone: DropZone) => void
+  onDrop: (e: React.DragEvent, id: string, zone: DropZone) => void
+  onDragEnd: () => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const children = allPages.filter(p => p.parent_id === page.id)
   const isActive = pathname === `/dashboard/page/${page.id}`
   const isDragging = dragId === page.id
-  const isDragOver = dragOverId === page.id && dragId !== page.id
+  const activeZone = dragOver?.id === page.id && !isDragging ? dragOver.zone : null
+
+  const fontSize = depth === 0
+    ? 'text-[13px] font-semibold'
+    : depth === 1
+    ? 'text-[12px] font-normal'
+    : 'text-[11.5px] font-normal'
+
+  const rowCls = isDragging
+    ? 'opacity-30'
+    : activeZone === 'into'
+    ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset'
+    : isActive
+    ? 'bg-slate-900 text-white'
+    : depth === 0
+    ? 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+    : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800'
 
   return (
-    <div>
-      <div
-        draggable={depth === 0}
-        onDragStart={depth === 0 ? (e) => onDragStart?.(e, page.id) : undefined}
-        onDragOver={depth === 0 ? (e) => onDragOver?.(e, page.id) : undefined}
-        onDrop={depth === 0 ? (e) => onDrop?.(e, page.id) : undefined}
-        onDragEnd={depth === 0 ? onDragEnd : undefined}
-        onClick={() => onNavigate(page.id)}
-        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 ${
-          isDragging
-            ? 'opacity-40'
-            : isDragOver
-            ? 'bg-blue-50 ring-2 ring-blue-300'
-            : isActive
-            ? 'bg-slate-900 text-white'
-            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-        }`}
-        style={{ paddingLeft: `${0.6 + depth * 1}rem` }}
-      >
-        {depth === 0 && (
-          <span
-            className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <GripVertical size={11} />
-          </span>
-        )}
+    <div className="relative">
+      {/* Drop BEFORE indicator */}
+      {activeZone === 'before' && (
+        <div
+          className="absolute left-3 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none"
+          style={{ top: 1 }}
+        />
+      )}
 
+      <div
+        draggable
+        onDragStart={(e) => onDragStart(e, page.id)}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(page.id, getZone(e)) }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(e, page.id, getZone(e)) }}
+        onDragEnd={onDragEnd}
+        onClick={() => onNavigate(page.id)}
+        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 relative ${rowCls}`}
+        style={{ paddingLeft: `${0.4 + depth * 1.1}rem` }}
+      >
+        {/* Drag handle */}
+        <span
+          className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={11} />
+        </span>
+
+        {/* Expand/collapse */}
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
           className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'}`}
@@ -97,11 +132,20 @@ function PageItem({
             : <span className="w-3" />}
         </button>
 
-        <FileText size={13} className={`shrink-0 ${isActive ? 'text-white/70' : 'text-slate-300'}`} />
+        {/* Icon */}
+        <FileText
+          size={depth === 0 ? 13 : 12}
+          className={`shrink-0 ${isActive ? 'text-white/70' : depth === 0 ? 'text-slate-400' : 'text-slate-300'}`}
+        />
+
+        {/* Title */}
         <Tooltip text={page.title || '제목 없음'}>
-          <span className="text-[13px] truncate block leading-tight py-0.5">{page.title || '제목 없음'}</span>
+          <span className={`truncate block leading-tight py-0.5 ${fontSize}`}>
+            {page.title || '제목 없음'}
+          </span>
         </Tooltip>
 
+        {/* Actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onCreateChild(page.id) }}
@@ -120,12 +164,34 @@ function PageItem({
         </div>
       </div>
 
-      {expanded && children.map(child => (
-        <PageItem key={child.id} page={child} allPages={allPages} depth={depth + 1}
-          pathname={pathname} onNavigate={onNavigate} onCreateChild={onCreateChild} onDelete={onDelete}
-          dragId={dragId} dragOverId={dragOverId}
-          onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd} />
-      ))}
+      {/* Drop AFTER indicator */}
+      {activeZone === 'after' && (
+        <div
+          className="absolute left-3 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none"
+          style={{ bottom: 1 }}
+        />
+      )}
+
+      {/* Children + tree line */}
+      {expanded && children.length > 0 && (
+        <div className="relative">
+          {/* Vertical tree line */}
+          <div
+            className="absolute top-0 bottom-1 w-px bg-slate-200 pointer-events-none"
+            style={{ left: `${1.15 + depth * 1.1}rem` }}
+          />
+          {children.map(child => (
+            <PageItem
+              key={child.id} page={child} allPages={allPages} depth={depth + 1}
+              pathname={pathname} onNavigate={onNavigate}
+              onCreateChild={onCreateChild} onDelete={onDelete}
+              dragId={dragId} dragOver={dragOver}
+              onDragStart={onDragStart} onDragOver={onDragOver}
+              onDrop={onDrop} onDragEnd={onDragEnd}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -139,24 +205,36 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const [trashedPages, setTrashedPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const [trashOpen, setTrashOpen] = useState(false)
-  const [pageOrder, setPageOrder] = useState<string[]>([])
+  // orderMap: { [parentId | 'root']: string[] }
+  const [orderMap, setOrderMap] = useState<Record<string, string[]>>({})
   const [dragId, setDragId] = useState<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const pageOrderRef = useRef<string[]>([])
-  const sortedPagesRef = useRef<Page[]>([])
+  const [dragOver, setDragOver] = useState<DragOverState | null>(null)
+
+  const orderMapRef = useRef<Record<string, string[]>>({})
+  const pagesRef = useRef<Page[]>([])
+  pagesRef.current = pages
+  orderMapRef.current = orderMap
+
   const router = useRouter()
   const pathname = usePathname()
   const supabase = useRef(createClient())
 
+  // Load order map from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(`page-order-${userName}`)
+      const saved = localStorage.getItem(`page-order-map-${userName}`)
       if (saved) {
         const parsed = JSON.parse(saved)
-        setPageOrder(parsed)
-        pageOrderRef.current = parsed
+        setOrderMap(parsed)
+        orderMapRef.current = parsed
       }
     } catch {}
+  }, [userName])
+
+  const saveOrderMap = useCallback((map: Record<string, string[]>) => {
+    setOrderMap(map)
+    orderMapRef.current = map
+    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(map))
   }, [userName])
 
   const fetchPages = useCallback(async () => {
@@ -206,41 +284,93 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setDragId(id)
   }, [])
 
-  const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverId(id)
+  const handleDragOver = useCallback((id: string, zone: DropZone) => {
+    setDragOver(prev => (prev?.id === id && prev?.zone === zone ? prev : { id, zone }))
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+  const handleDrop = useCallback((e: React.DragEvent, targetId: string, zone: DropZone) => {
     e.preventDefault()
     const sourceId = e.dataTransfer.getData('text/plain')
     setDragId(null)
-    setDragOverId(null)
+    setDragOver(null)
     if (!sourceId || sourceId === targetId) return
 
-    const currentOrder = pageOrderRef.current
-    const currentPages = sortedPagesRef.current
-    const ids = currentPages.map(p => p.id)
+    const pages = pagesRef.current
+    const sourcePage = pages.find(p => p.id === sourceId)
+    const targetPage = pages.find(p => p.id === targetId)
+    if (!sourcePage || !targetPage) return
 
-    const fromIdx = ids.indexOf(sourceId)
-    const toIdx = ids.indexOf(targetId)
-    if (fromIdx === -1 || toIdx === -1) return
+    if (zone === 'into') {
+      // Cannot drop into own descendant
+      if (isDescendant(sourceId, targetId, pages)) return
 
-    const newIds = [...ids]
-    newIds.splice(fromIdx, 1)
-    newIds.splice(toIdx, 0, sourceId)
+      const oldKey = sourcePage.parent_id ?? 'root'
+      const newKey = targetId
 
-    // include any ids in current order that aren't in top-level (shouldn't happen but safe)
-    const merged = [...newIds, ...currentOrder.filter(id => !newIds.includes(id))]
-    setPageOrder(merged)
-    pageOrderRef.current = merged
-    localStorage.setItem(`page-order-${userName}`, JSON.stringify(merged))
-  }, [userName])
+      // Update local state
+      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
+      // Update DB
+      supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
+
+      // Update order map: remove from old parent, append to new parent
+      const newMap = { ...orderMapRef.current }
+      newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
+      newMap[newKey] = [...(newMap[newKey] ?? []), sourceId]
+      saveOrderMap(newMap)
+
+    } else {
+      // before / after: move source to same level as target
+      const newParentId = targetPage.parent_id
+      const oldParentId = sourcePage.parent_id
+      const newKey = newParentId ?? 'root'
+      const oldKey = oldParentId ?? 'root'
+
+      // Prevent circular (e.g. dragging parent before one of its descendants)
+      if (newParentId && isDescendant(sourceId, newParentId, pages)) return
+
+      // Pages at target level (including source after reparent)
+      const updatedPages = oldParentId !== newParentId
+        ? pages.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p)
+        : pages
+
+      if (oldParentId !== newParentId) {
+        setPages(updatedPages)
+        supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
+      }
+
+      // Compute sorted IDs for the target level
+      const levelIds = updatedPages
+        .filter(p => p.parent_id === newParentId)
+        .map(p => p.id)
+
+      const currentOrder = orderMapRef.current[newKey] ?? []
+      const sortedIds = [...levelIds].sort((a, b) => {
+        const ai = currentOrder.indexOf(a)
+        const bi = currentOrder.indexOf(b)
+        if (ai === -1 && bi === -1) return 0
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+
+      // Re-insert source before/after target
+      const withoutSource = sortedIds.filter(id => id !== sourceId)
+      const targetIdx = withoutSource.indexOf(targetId)
+      const insertAt = zone === 'before' ? targetIdx : targetIdx + 1
+      withoutSource.splice(Math.max(0, insertAt), 0, sourceId)
+
+      const newMap = { ...orderMapRef.current }
+      newMap[newKey] = withoutSource
+      if (oldKey !== newKey) {
+        newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
+      }
+      saveOrderMap(newMap)
+    }
+  }, [saveOrderMap])
 
   const handleDragEnd = useCallback(() => {
     setDragId(null)
-    setDragOverId(null)
+    setDragOver(null)
   }, [])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
@@ -278,18 +408,20 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setTrashedPages(prev => prev.filter(p => p.id !== pageId))
   }
 
-  const topLevelPages = pages.filter(p => p.parent_id === null)
-  const sortedTopLevelPages = [...topLevelPages].sort((a, b) => {
-    const ai = pageOrder.indexOf(a.id)
-    const bi = pageOrder.indexOf(b.id)
-    if (ai === -1 && bi === -1) return 0
+  // Sort pages by orderMap within each parent group
+  const sortedPages = [...pages].sort((a, b) => {
+    if (a.parent_id !== b.parent_id) return 0
+    const key = a.parent_id ?? 'root'
+    const order = orderMap[key] ?? []
+    const ai = order.indexOf(a.id)
+    const bi = order.indexOf(b.id)
+    if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     if (ai === -1) return 1
     if (bi === -1) return -1
     return ai - bi
   })
 
-  // keep ref in sync for use inside drag handlers
-  sortedPagesRef.current = sortedTopLevelPages
+  const topLevelPages = sortedPages.filter(p => p.parent_id === null)
 
   return (
     <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-100 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -333,14 +465,36 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
             <button onClick={() => createPage(null)} className="mt-1 text-slate-600 hover:text-slate-900 underline underline-offset-2">새 페이지 만들기</button>
           </div>
         ) : (
-          sortedTopLevelPages.map(page => (
-            <PageItem key={page.id} page={page} allPages={pages} depth={0}
-              pathname={pathname} onNavigate={navigate}
-              onCreateChild={(parentId) => createPage(parentId)} onDelete={deletePage}
-              dragId={dragId} dragOverId={dragOverId}
-              onDragStart={handleDragStart} onDragOver={handleDragOver}
-              onDrop={handleDrop} onDragEnd={handleDragEnd} />
-          ))
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              // Drop on empty area below all pages → move to top level, last position
+              const sourceId = e.dataTransfer.getData('text/plain')
+              if (!sourceId) return
+              const pages = pagesRef.current
+              const sourcePage = pages.find(p => p.id === sourceId)
+              if (!sourcePage || sourcePage.parent_id === null) return
+              setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: null } : p))
+              supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
+              const newMap = { ...orderMapRef.current }
+              const oldKey = sourcePage.parent_id ?? 'root'
+              newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
+              newMap['root'] = [...(newMap['root'] ?? []), sourceId]
+              saveOrderMap(newMap)
+              setDragId(null); setDragOver(null)
+            }}
+          >
+            {topLevelPages.map(page => (
+              <PageItem
+                key={page.id} page={page} allPages={sortedPages} depth={0}
+                pathname={pathname} onNavigate={navigate}
+                onCreateChild={(parentId) => createPage(parentId)} onDelete={deletePage}
+                dragId={dragId} dragOver={dragOver}
+                onDragStart={handleDragStart} onDragOver={handleDragOver}
+                onDrop={handleDrop} onDragEnd={handleDragEnd}
+              />
+            ))}
+          </div>
         )}
 
         <div className="mt-4 px-2 border-t border-slate-100 pt-3">
