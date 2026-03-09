@@ -25,6 +25,7 @@ import {
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
+  ExternalLink, Copy, Pencil, Unlink,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -59,6 +60,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copied, setCopied] = useState(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; anchor: number } | null>(null)
+  const [linkPopup, setLinkPopup] = useState<{ href: string; x: number; y: number } | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
   const isMounted = useRef(true)
   const titleRef = useRef(title)
 
@@ -182,6 +185,26 @@ export default function EditorWrapper({ page }: { page: Page }) {
       catch { editor.commands.setContent(page.content || '') }
     }
   }, [page.id, editor, page.title, page.content])
+
+  useEffect(() => {
+    if (!editor) return undefined
+    const handler = () => {
+      const href = editor.getAttributes('link').href
+      if (href && editor.state.selection.empty) {
+        const { from } = editor.state.selection
+        const coords = editor.view.coordsAtPos(from)
+        setLinkPopup({
+          href,
+          x: Math.min(coords.left, window.innerWidth - 320),
+          y: coords.bottom + 6,
+        })
+      } else {
+        setLinkPopup(null)
+      }
+    }
+    editor.on('selectionUpdate', handler)
+    return () => { editor.off('selectionUpdate', handler) }
+  }, [editor])
 
   const setLink = () => {
     if (!editor) return
@@ -445,6 +468,57 @@ export default function EditorWrapper({ page }: { page: Page }) {
             >
               <ChevronDown size={14} />
               접기 블록으로 감싸기
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 링크 팝업 */}
+      {linkPopup && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl px-3 py-2.5 flex flex-col gap-2 min-w-[240px] max-w-[320px]"
+          style={{ left: linkPopup.x, top: linkPopup.y }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <Link2 size={11} />
+            <span className="truncate flex-1 text-blue-500">{linkPopup.href}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => window.open(linkPopup.href, '_blank', 'noopener')}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 transition-colors"
+            >
+              <ExternalLink size={11} />
+              미리보기
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(linkPopup.href)
+                setLinkCopied(true)
+                setTimeout(() => setLinkCopied(false), 2000)
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 transition-colors"
+            >
+              {linkCopied ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+              {linkCopied ? '복사됨' : '복사'}
+            </button>
+            <button
+              onClick={() => { setLink(); setLinkPopup(null) }}
+              className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 transition-colors"
+            >
+              <Pencil size={11} />
+              편집
+            </button>
+            <button
+              onClick={() => {
+                editor.chain().focus().extendMarkRange('link').unsetLink().run()
+                setLinkPopup(null)
+              }}
+              className="flex items-center justify-center px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-red-50 text-xs text-red-400 hover:text-red-600 transition-colors"
+            >
+              <Unlink size={11} />
             </button>
           </div>
         </div>,
