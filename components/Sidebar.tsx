@@ -115,7 +115,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const channel = client
       .channel(`pages-${userName}`)
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'pages', filter: `author_name=eq.${userName}` },
+        { event: '*', schema: 'public', table: 'pages' },
         () => fetchPages()
       )
       .subscribe()
@@ -128,20 +128,24 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   }
 
   const createPage = async (parentId: string | null = null) => {
-    const { data, error } = await supabase
+    const { data, error } = await supabase.current
       .from('pages')
       .insert({ title: '제목 없음', content: '', author_name: userName, parent_id: parentId })
       .select()
       .single()
 
     if (error) { alert('오류: ' + error.message); return }
-    if (data) router.push(`/dashboard/page/${data.id}`)
+    if (data) {
+      await fetchPages()
+      router.push(`/dashboard/page/${data.id}`)
+    }
   }
 
   const deletePage = async (e: React.MouseEvent, pageId: string) => {
     e.stopPropagation()
     if (!confirm('이 페이지를 삭제할까요?')) return
-    await supabase.from('pages').delete().eq('id', pageId)
+    await supabase.current.from('pages').delete().eq('id', pageId)
+    await fetchPages()
     if (pathname === `/dashboard/page/${pageId}`) router.push('/dashboard')
   }
 
