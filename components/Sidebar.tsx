@@ -62,7 +62,7 @@ function getZone(e: React.DragEvent): DropZone {
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
   dragId, dragOver, onDragStart, onDragOver, onDrop, onDragEnd,
-  onMoveFirst, onMoveLast,
+  onMoveUp, onMoveDown,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
