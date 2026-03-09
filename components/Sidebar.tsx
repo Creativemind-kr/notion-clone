@@ -115,7 +115,18 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const channel = client
       .channel(`pages-${userName}`)
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'pages' },
+        { event: 'UPDATE', schema: 'public', table: 'pages' },
+        (payload) => {
+          const updated = payload.new as Page
+          setPages(prev => prev.map(p => p.id === updated.id ? { ...p, title: updated.title } : p))
+        }
+      )
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'pages' },
+        () => fetchPages()
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'pages' },
         () => fetchPages()
       )
       .subscribe()
