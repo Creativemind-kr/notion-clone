@@ -303,6 +303,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
               { from: parentPos, to: parentEnd },
               {
                 type: 'details',
+                attrs: { open: true },
                 content: [
                   { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
                   { type: 'detailsContent', content: [{ type: 'paragraph' }] },
@@ -466,6 +467,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
                   { from: parentPos, to: parentEnd },
                   {
                     type: 'details',
+                    attrs: { open: true },
                     content: [
                       { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
                       { type: 'detailsContent', content: [{ type: 'paragraph' }] },

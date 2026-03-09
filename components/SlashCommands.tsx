@@ -30,6 +30,7 @@ const commands = [
       { from: parentPos, to: parentEnd },
       {
         type: 'details',
+        attrs: { open: true },
         content: [
           { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
           { type: 'detailsContent', content: [{ type: 'paragraph' }] },
