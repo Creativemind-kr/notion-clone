@@ -498,6 +498,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setTrashedPages(prev => prev.filter(p => p.id !== pageId))
   }
 
+  const emptyTrash = async () => {
+    if (trashedPages.length === 0) return
+    if (!confirm(`휴지통의 페이지 ${trashedPages.length}개를 모두 영구 삭제할까요?`)) return
+    await supabase.current.from('pages').delete().eq('author_name', userName).not('deleted_at', 'is', null)
+    setTrashedPages([])
+  }
+
   // Sort pages by orderMap within each parent group
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
@@ -597,17 +604,28 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         )}
 
         <div className="mt-4 px-2 border-t border-slate-100 pt-3">
-          <button
-            onClick={() => setTrashOpen(o => !o)}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <Trash2 size={13} />
-            <span className="text-[13px] font-medium flex-1 text-left">휴지통</span>
+          <div className="flex items-center w-full">
+            <button
+              onClick={() => setTrashOpen(o => !o)}
+              className="flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <Trash2 size={13} />
+              <span className="text-[13px] font-medium flex-1 text-left">휴지통</span>
+              {trashedPages.length > 0 && (
+                <span className="text-[11px] bg-slate-100 text-slate-400 rounded-full px-1.5 py-0.5 font-medium">{trashedPages.length}</span>
+              )}
+              {trashOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
             {trashedPages.length > 0 && (
-              <span className="text-[11px] bg-slate-100 text-slate-400 rounded-full px-1.5 py-0.5 font-medium">{trashedPages.length}</span>
+              <button
+                onClick={emptyTrash}
+                className="ml-1 px-2 py-1 text-[11px] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                title="휴지통 비우기"
+              >
+                비우기
+              </button>
             )}
-            {trashOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
+          </div>
 
           {trashOpen && (
             <div className="mt-1 space-y-0.5">
