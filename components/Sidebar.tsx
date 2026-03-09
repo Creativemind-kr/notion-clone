@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus } from 'lucide-react'
@@ -97,29 +97,30 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
-  const supabase = createClient()
+  const supabase = useRef(createClient())
 
   const fetchPages = useCallback(async () => {
-    const { data } = await supabase
+    const { data } = await supabase.current
       .from('pages')
       .select('id, title, parent_id, created_at')
       .eq('author_name', userName)
       .order('created_at', { ascending: true })
     setPages(data || [])
     setLoading(false)
-  }, [supabase, userName])
+  }, [userName])
 
   useEffect(() => {
     fetchPages()
-    const channel = supabase
+    const client = supabase.current
+    const channel = client
       .channel(`pages-${userName}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'pages', filter: `author_name=eq.${userName}` },
         () => fetchPages()
       )
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchPages, supabase, userName])
+    return () => { client.removeChannel(channel) }
+  }, [fetchPages, userName])
 
   const navigate = (id: string) => {
     router.push(`/dashboard/page/${id}`)
