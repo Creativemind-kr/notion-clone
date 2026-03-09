@@ -54,7 +54,12 @@ function PageItem({
         </button>
 
         <FileText size={14} className="shrink-0 text-gray-400" />
-        <span className="text-[13px] truncate flex-1 min-w-0" title={page.title || '제목 없음'}>{page.title || '제목 없음'}</span>
+        <div className="group/tip relative flex-1 min-w-0">
+          <span className="text-[13px] truncate block">{page.title || '제목 없음'}</span>
+          <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
+            <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{page.title || '제목 없음'}</div>
+          </div>
+        </div>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
           <button
@@ -237,7 +242,12 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           style={{ width: 'calc(100% - 8px)' }}
         >
           <Calendar size={14} />
-          <span className="truncate" title={`${userName}의 캘린더`}>{userName}의 캘린더</span>
+          <div className="group/tip relative flex-1 min-w-0">
+            <span className="truncate block">{userName}의 캘린더</span>
+            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
+              <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{userName}의 캘린더</div>
+            </div>
+          </div>
         </button>
 
         <div className="px-3 mb-1 mt-2 flex items-center justify-between">
@@ -292,7 +302,12 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
                 trashedPages.map(page => (
                   <div key={page.id} className="group flex items-center gap-1 py-1 mx-1 px-2 rounded-lg text-gray-400">
                     <FileText size={12} className="shrink-0" />
-                    <span className="text-[13px] truncate flex-1 min-w-0" title={page.title || '제목 없음'}>{page.title || '제목 없음'}</span>
+                    <div className="group/tip relative flex-1 min-w-0">
+                      <span className="text-[13px] truncate block">{page.title || '제목 없음'}</span>
+                      <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
+                        <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{page.title || '제목 없음'}</div>
+                      </div>
+                    </div>
                     <span className="text-xs text-gray-300 shrink-0">{daysLeft(page.deleted_at!)}일</span>
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
                       <button
@@ -323,7 +338,12 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-medium">
             {userName[0]}
           </div>
-          <span className="text-sm text-gray-600 flex-1 truncate" title={userName}>{userName}</span>
+          <div className="group/tip relative flex-1 min-w-0">
+            <span className="text-sm text-gray-600 truncate block">{userName}</span>
+            <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-[200] opacity-0 group-hover/tip:opacity-100">
+              <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">{userName}</div>
+            </div>
+          </div>
           <button onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }} className="text-gray-400 hover:text-gray-700" title="나가기">
             <LogOut size={14} />
           </button>
