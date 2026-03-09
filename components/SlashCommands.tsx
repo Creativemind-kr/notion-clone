@@ -4,6 +4,7 @@ import { ReactRenderer } from '@tiptap/react'
 import tippy, { Instance } from 'tippy.js'
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { Editor } from '@tiptap/core'
+import { createClient } from '@/lib/supabase/client'
 
 const commands = [
   { title: '텍스트', desc: '일반 텍스트', icon: '¶', action: (editor: Editor) => editor.chain().focus().setParagraph().run() },
@@ -20,6 +21,40 @@ const commands = [
   { title: '이미지', desc: 'URL로 이미지 삽입', icon: '🖼', action: (editor: Editor) => {
     const url = prompt('이미지 URL을 입력하세요:')
     if (url) editor.chain().focus().setImage({ src: url }).run()
+  }},
+  { title: '캘린더', desc: '이번 달 일정 불러오기', icon: '📅', action: async (editor: Editor) => {
+    const userName = localStorage.getItem('workspace_user')
+    if (!userName) return
+
+    const supabase = createClient()
+    const today = new Date()
+    const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    const to = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
+
+    const { data } = await supabase
+      .from('events')
+      .select('*')
+      .eq('author_name', userName)
+      .gte('date', from)
+      .lt('date', to)
+      .order('date')
+      .order('time')
+
+    if (!data || data.length === 0) {
+      editor.chain().focus().insertContent('<p>📅 이번 달 일정이 없어요.</p>').run()
+      return
+    }
+
+    const rows = data.map(e => {
+      const time = e.time ? ` ${e.time}` : ''
+      const desc = e.description ? ` — ${e.description}` : ''
+      return `<li><strong>${e.date}${time}</strong> ${e.title}${desc}</li>`
+    }).join('')
+
+    editor.chain().focus().insertContent(
+      `<p><strong>📅 ${today.getFullYear()}년 ${today.getMonth() + 1}월 일정</strong></p><ul>${rows}</ul>`
+    ).run()
   }},
 ]
 
@@ -84,8 +119,8 @@ export const SlashCommands = Extension.create({
         editor: this.editor,
         char: '/',
         command: ({ editor, range, props }) => {
-          props.action(editor)
           editor.chain().focus().deleteRange(range).run()
+          props.action(editor)
         },
         items: ({ query }: { query: string }) =>
           commands.filter(
