@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
+import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical, ChevronsUp, ChevronsDown } from 'lucide-react'
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -62,6 +62,7 @@ function getZone(e: React.DragEvent): DropZone {
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
   dragId, dragOver, onDragStart, onDragOver, onDrop, onDragEnd,
+  onMoveFirst, onMoveLast,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
@@ -71,6 +72,8 @@ function PageItem({
   onDragOver: (id: string, zone: DropZone) => void
   onDrop: (e: React.DragEvent, id: string, zone: DropZone) => void
   onDragEnd: () => void
+  onMoveFirst: (id: string, parentId: string | null) => void
+  onMoveLast: (id: string, parentId: string | null) => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const children = allPages.filter(p => p.parent_id === page.id)
@@ -148,6 +151,20 @@ function PageItem({
         {/* Actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
           <button
+            onClick={(e) => { e.stopPropagation(); onMoveFirst(page.id, page.parent_id) }}
+            className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
+            title="맨 위로"
+          >
+            <ChevronsUp size={11} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveLast(page.id, page.parent_id) }}
+            className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
+            title="맨 아래로"
+          >
+            <ChevronsDown size={11} />
+          </button>
+          <button
             onClick={(e) => { e.stopPropagation(); onCreateChild(page.id) }}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
             title="하위 페이지 만들기"
@@ -188,6 +205,7 @@ function PageItem({
               dragId={dragId} dragOver={dragOver}
               onDragStart={onDragStart} onDragOver={onDragOver}
               onDrop={onDrop} onDragEnd={onDragEnd}
+              onMoveFirst={onMoveFirst} onMoveLast={onMoveLast}
             />
           ))}
         </div>
@@ -218,6 +236,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const router = useRouter()
   const pathname = usePathname()
   const supabase = useRef(createClient())
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Load order map from localStorage
   useEffect(() => {
@@ -371,7 +391,57 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const handleDragEnd = useCallback(() => {
     setDragId(null)
     setDragOver(null)
+    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null }
   }, [])
+
+  // Auto-scroll when dragging near top/bottom edge of the scroll container
+  const handleScrollAreaDragOver = useCallback((e: React.DragEvent) => {
+    const el = scrollRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const threshold = 60
+    const y = e.clientY
+    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null }
+    if (y < rect.top + threshold) {
+      const speed = Math.max(2, Math.round((threshold - (y - rect.top)) / 6))
+      autoScrollTimer.current = setInterval(() => { el.scrollTop -= speed }, 16)
+    } else if (y > rect.bottom - threshold) {
+      const speed = Math.max(2, Math.round((threshold - (rect.bottom - y)) / 6))
+      autoScrollTimer.current = setInterval(() => { el.scrollTop += speed }, 16)
+    }
+  }, [])
+
+  const handleMoveFirst = useCallback((id: string, parentId: string | null) => {
+    const key = parentId ?? 'root'
+    const pages = pagesRef.current
+    const levelIds = pages.filter(p => p.parent_id === parentId).map(p => p.id)
+    const currentOrder = orderMapRef.current[key] ?? []
+    const sorted = [...levelIds].sort((a, b) => {
+      const ai = currentOrder.indexOf(a), bi = currentOrder.indexOf(b)
+      if (ai === -1 && bi === -1) return 0; if (ai === -1) return 1; if (bi === -1) return -1
+      return ai - bi
+    })
+    const newOrder = [id, ...sorted.filter(i => i !== id)]
+    const newMap = { ...orderMapRef.current, [key]: newOrder }
+    setOrderMap(newMap); orderMapRef.current = newMap
+    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
+  }, [userName])
+
+  const handleMoveLast = useCallback((id: string, parentId: string | null) => {
+    const key = parentId ?? 'root'
+    const pages = pagesRef.current
+    const levelIds = pages.filter(p => p.parent_id === parentId).map(p => p.id)
+    const currentOrder = orderMapRef.current[key] ?? []
+    const sorted = [...levelIds].sort((a, b) => {
+      const ai = currentOrder.indexOf(a), bi = currentOrder.indexOf(b)
+      if (ai === -1 && bi === -1) return 0; if (ai === -1) return 1; if (bi === -1) return -1
+      return ai - bi
+    })
+    const newOrder = [...sorted.filter(i => i !== id), id]
+    const newMap = { ...orderMapRef.current, [key]: newOrder }
+    setOrderMap(newMap); orderMapRef.current = newMap
+    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
+  }, [userName])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
@@ -433,7 +503,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto py-2"
+        onDragOver={handleScrollAreaDragOver}
+        onDragLeave={() => { if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null } }}
+        onDrop={() => { if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null } }}
+      >
         <div className="px-2 mb-1">
           <button
             onClick={() => { router.push('/dashboard/calendar'); onClose() }}
@@ -492,6 +568,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
                 dragId={dragId} dragOver={dragOver}
                 onDragStart={handleDragStart} onDragOver={handleDragOver}
                 onDrop={handleDrop} onDragEnd={handleDragEnd}
+                onMoveFirst={handleMoveFirst} onMoveLast={handleMoveLast}
               />
             ))}
           </div>
