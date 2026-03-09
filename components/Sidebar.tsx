@@ -282,8 +282,35 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       .select('id, title, parent_id, created_at, deleted_at')
       .eq('author_name', userName).order('created_at', { ascending: true })
     const all = data || []
-    setPages(all.filter(p => !p.deleted_at))
+    const active = all.filter(p => !p.deleted_at)
+    setPages(active)
     setTrashedPages(all.filter(p => p.deleted_at))
+
+    // 새 페이지(orderMap에 없는 것)를 자동으로 각 그룹 끝에 추가
+    const currentMap = orderMapRef.current
+    const newMap = { ...currentMap }
+    let changed = false
+    const activeIds = new Set(active.map(p => p.id))
+
+    active.forEach(p => {
+      const key = p.parent_id ?? 'root'
+      if (!newMap[key]) newMap[key] = []
+      if (!newMap[key].includes(p.id)) {
+        newMap[key] = [...newMap[key], p.id]
+        changed = true
+      }
+    })
+    // 삭제된 페이지 ID를 orderMap에서 제거
+    Object.keys(newMap).forEach(key => {
+      const cleaned = newMap[key].filter(id => activeIds.has(id))
+      if (cleaned.length !== newMap[key].length) { newMap[key] = cleaned; changed = true }
+    })
+    if (changed) {
+      setOrderMap(newMap)
+      orderMapRef.current = newMap
+      localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
+    }
+
     setLoading(false)
   }, [userName])
 
