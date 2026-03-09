@@ -220,7 +220,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   if (!editor) return null
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* 상단 툴바 */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-3 py-1.5 flex items-center gap-0.5 flex-wrap">
 

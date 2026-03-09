@@ -44,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
       <Sidebar userName={userName} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex-1 overflow-y-auto flex flex-col min-w-0">
+      <main className="flex-1 overflow-hidden flex flex-col min-w-0">
         <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-md z-10">
           <button
             onClick={() => setSidebarOpen(true)}
