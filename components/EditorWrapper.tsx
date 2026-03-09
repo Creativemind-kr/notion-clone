@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useCallback, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -28,6 +29,14 @@ import 'tippy.js/dist/tippy.css'
 
 interface Page { id: string; title: string; content: string }
 
+const HIGHLIGHT_COLORS = [
+  { label: '노랑', value: '#FFF176' },
+  { label: '초록', value: '#B9F6CA' },
+  { label: '파랑', value: '#B3E5FC' },
+  { label: '분홍', value: '#FCE4EC' },
+  { label: '주황', value: '#FFE0B2' },
+]
+
 const FONT_SIZES = ['12px', '14px', '16px', '18px', '20px', '24px', '28px', '32px']
 const FONTS = [
   { label: '기본 (Sans)', value: 'inherit' },
@@ -47,6 +56,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [saveError, setSaveError] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const isMounted = useRef(true)
   const titleRef = useRef(title)
 
@@ -70,6 +80,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
       isMounted.current = false
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [])
 
   const saveSelection = () => {
@@ -279,7 +295,17 @@ export default function EditorWrapper({ page }: { page: Page }) {
       </div>
 
       {/* 에디터 */}
-      <div className="flex-1 overflow-y-auto" onClick={() => setShowColorPicker(false)}>
+      <div
+        className="flex-1 overflow-y-auto"
+        onClick={() => { setShowColorPicker(false); setCtxMenu(null) }}
+        onContextMenu={(e) => {
+          if (!editor || editor.state.selection.empty) return
+          e.preventDefault()
+          const x = Math.min(e.clientX, window.innerWidth - 240)
+          const y = Math.min(e.clientY, window.innerHeight - 320)
+          setCtxMenu({ x, y })
+        }}
+      >
         <div className="max-w-3xl mx-auto px-8 py-10">
           <input
             type="text"
@@ -298,6 +324,97 @@ export default function EditorWrapper({ page }: { page: Page }) {
           <EditorContent editor={editor} className="tiptap" />
         </div>
       </div>
+
+      {/* 우클릭 컨텍스트 메뉴 */}
+      {ctxMenu && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl w-56 py-2 text-sm"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 헤더 */}
+          <div className="px-3 pb-1 pt-0.5">
+            <p className="text-xs text-gray-400 font-medium mb-1.5">헤더</p>
+            <div className="flex gap-1">
+              {([1, 2, 3] as const).map(level => (
+                <button key={level} onClick={() => { editor.chain().focus().toggleHeading({ level }).run(); setCtxMenu(null) }}
+                  className={`flex-1 py-1 rounded text-xs font-bold border transition-colors ${editor.isActive('heading', { level }) ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-100'}`}>
+                  H{level}
+                </button>
+              ))}
+              <button onClick={() => { editor.chain().focus().setParagraph().run(); setCtxMenu(null) }}
+                className={`flex-1 py-1 rounded text-xs border transition-colors ${editor.isActive('paragraph') ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 hover:bg-gray-100'}`}>
+                T
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 글씨체 */}
+          <div className="px-3">
+            <p className="text-xs text-gray-400 font-medium mb-1">글씨체</p>
+            <select
+              className="w-full text-sm border border-gray-200 rounded px-2 py-1 bg-white"
+              defaultValue=""
+              onChange={(e) => { if (e.target.value) { editor.chain().focus().setFontFamily(e.target.value).run() } }}
+            >
+              <option value="inherit">기본 (Sans)</option>
+              <option value="Georgia, serif">명조 (Serif)</option>
+              <option value="monospace">고정폭 (Mono)</option>
+              <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
+            </select>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 글자 크기 */}
+          <div className="px-3">
+            <p className="text-xs text-gray-400 font-medium mb-1">글자 크기</p>
+            <div className="flex flex-wrap gap-1">
+              {['12px','14px','16px','18px','20px','24px','28px','32px'].map(s => (
+                <button key={s} onClick={() => { editor.chain().focus().setFontSize(s).run(); setCtxMenu(null) }}
+                  className="px-1.5 py-0.5 text-xs border border-gray-200 rounded hover:bg-gray-100 transition-colors">
+                  {s.replace('px', '')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 글자 색상 */}
+          <div className="px-3">
+            <p className="text-xs text-gray-400 font-medium mb-1">글자 색상</p>
+            <div className="flex gap-1 flex-wrap">
+              {COLORS.map(color => (
+                <button key={color} onClick={() => { editor.chain().focus().setColor(color).run(); setCtxMenu(null) }}
+                  className="w-5 h-5 rounded-full border border-gray-200 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: color }} />
+              ))}
+              <button onClick={() => { editor.chain().focus().unsetColor().run(); setCtxMenu(null) }}
+                className="text-xs text-gray-400 hover:text-gray-600 ml-1">기본</button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 하이라이트 */}
+          <div className="px-3">
+            <p className="text-xs text-gray-400 font-medium mb-1">하이라이트</p>
+            <div className="flex gap-1">
+              {HIGHLIGHT_COLORS.map(c => (
+                <button key={c.value} onClick={() => { editor.chain().focus().setHighlight({ color: c.value }).run(); setCtxMenu(null) }}
+                  className="w-5 h-5 rounded border border-gray-200 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: c.value }} title={c.label} />
+              ))}
+              <button onClick={() => { editor.chain().focus().unsetHighlight().run(); setCtxMenu(null) }}
+                className="text-xs text-gray-400 hover:text-gray-600 ml-1">제거</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
