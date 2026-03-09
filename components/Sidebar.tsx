@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X } from 'lucide-react'
+import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar } from 'lucide-react'
 
 interface Page {
   id: string
@@ -228,6 +228,18 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
+        {/* 캘린더 링크 */}
+        <button
+          onClick={() => { router.push('/dashboard/calendar'); onClose() }}
+          className={`flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg mx-1 transition-colors text-sm ${
+            pathname === '/dashboard/calendar' ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+          }`}
+          style={{ width: 'calc(100% - 8px)' }}
+        >
+          <Calendar size={14} />
+          <span>캘린더</span>
+        </button>
+
         <div className="px-3 mb-1 flex items-center justify-between">
           <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">페이지</span>
           <button
