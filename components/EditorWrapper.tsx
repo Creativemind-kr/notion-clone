@@ -16,13 +16,16 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
+import Details from '@tiptap/extension-details'
+import DetailsSummary from '@tiptap/extension-details-summary'
+import DetailsContent from '@tiptap/extension-details-content'
 import { SlashCommands } from './SlashCommands'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bold, Italic, UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
-  Code, Quote, Highlighter, Link2, Share2, Check,
+  Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -141,6 +144,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
       TableCell,
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
+      Details.configure({ persist: true }),
+      DetailsSummary,
+      DetailsContent,
       SlashCommands,
     ],
     content: (() => {
@@ -281,6 +287,17 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBlockquote().run() }} title="인용구" className={`p-1.5 rounded transition-colors ${editor.isActive('blockquote') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}><Quote size={14} /></button>
         <button onMouseDown={(e) => { e.preventDefault(); setLink() }} title="링크" className={`p-1.5 rounded transition-colors ${editor.isActive('link') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}><Link2 size={14} /></button>
 
+        <div className="w-px h-5 bg-gray-200 mx-0.5" />
+
+        <button
+          onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setDetails().run() }}
+          title="접기 블록"
+          className={`p-1.5 rounded transition-colors flex items-center gap-0.5 ${editor.isActive('details') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}
+        >
+          <ChevronDown size={14} />
+          <span className="text-xs">접기</span>
+        </button>
+
         <div className="flex-1" />
         <button
           onClick={copyLink}
@@ -411,6 +428,19 @@ export default function EditorWrapper({ page }: { page: Page }) {
               <button onClick={() => { editor.chain().focus().unsetHighlight().run(); setCtxMenu(null) }}
                 className="text-xs text-gray-400 hover:text-gray-600 ml-1">제거</button>
             </div>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 접기 */}
+          <div className="px-3">
+            <button
+              onClick={() => { editor.chain().focus().setDetails().run(); setCtxMenu(null) }}
+              className="w-full flex items-center gap-2 py-1 text-sm text-gray-700 hover:text-gray-900"
+            >
+              <ChevronDown size={14} />
+              접기 블록으로 감싸기
+            </button>
           </div>
         </div>,
         document.body

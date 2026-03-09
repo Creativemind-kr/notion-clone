@@ -178,3 +178,44 @@ body {
   border-radius: 6px;
   margin: 0.5em 0;
 }
+
+/* 접기 블록 */
+.tiptap details {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 0.5em 0;
+  overflow: hidden;
+}
+
+.tiptap details summary {
+  padding: 0.6em 1em;
+  cursor: pointer;
+  font-weight: 600;
+  background: #f9fafb;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  user-select: none;
+}
+
+.tiptap details summary::-webkit-details-marker {
+  display: none;
+}
+
+.tiptap details summary::before {
+  content: '▶';
+  font-size: 0.65em;
+  color: #9ca3af;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.tiptap details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.tiptap details > div {
+  padding: 0.75em 1em;
+  border-top: 1px solid #e5e7eb;
+}

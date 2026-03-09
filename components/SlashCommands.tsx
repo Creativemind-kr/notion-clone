@@ -18,6 +18,7 @@ const commands = [
   { title: '코드 블록', desc: '코드 블록', icon: '<>', action: (editor: Editor) => editor.chain().focus().toggleCodeBlock().run() },
   { title: '구분선', desc: '수평선', icon: '—', action: (editor: Editor) => editor.chain().focus().setHorizontalRule().run() },
   { title: '표', desc: '3x3 표 삽입', icon: '⊞', action: (editor: Editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { title: '접기', desc: '접을 수 있는 블록', icon: '▶', action: (editor: Editor) => editor.chain().focus().setDetails().run() },
   { title: '이미지', desc: 'URL로 이미지 삽입', icon: '🖼', action: (editor: Editor) => {
     const url = prompt('이미지 URL을 입력하세요:')
     if (url) editor.chain().focus().setImage({ src: url }).run()
