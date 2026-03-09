@@ -38,7 +38,7 @@ function PageItem({
     <div>
       <div
         onClick={() => onNavigate(page.id)}
-        className={`group flex items-center gap-1 py-1 mx-1 rounded-lg cursor-pointer transition-colors pr-1 ${
+        className={`group flex items-center gap-1 py-1.5 mx-1 rounded-lg cursor-pointer transition-colors pr-1 ${
           isActive ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
         }`}
         style={{ paddingLeft: `${0.75 + depth * 1}rem` }}
@@ -53,8 +53,8 @@ function PageItem({
           }
         </button>
 
-        <FileText size={14} className="shrink-0 text-gray-400" />
-        <span className="text-[14px] truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
+        <FileText size={15} className="shrink-0 text-gray-400" />
+        <span className="text-[15px] truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
 
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
           <button
@@ -220,10 +220,10 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   return (
     <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-gray-50 border-r border-gray-200 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="p-3 border-b border-gray-200">
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
-          <div className="w-6 h-6 bg-gray-900 rounded text-white text-xs flex items-center justify-center font-bold">W</div>
-          <span className="text-sm font-semibold text-gray-800 flex-1 truncate">워크스페이스</span>
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg">
+          <div className="w-7 h-7 bg-gray-900 rounded text-white text-sm flex items-center justify-center font-bold">W</div>
+          <span className="text-base font-semibold text-gray-800 flex-1 truncate">워크스페이스</span>
         </div>
       </div>
 
@@ -231,30 +231,30 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         {/* 캘린더 링크 */}
         <button
           onClick={() => { router.push('/dashboard/calendar'); onClose() }}
-          className={`flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg mx-1 transition-colors text-sm ${
-            pathname === '/dashboard/calendar' ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+          className={`flex items-center gap-2.5 px-3 py-2 mb-1 rounded-lg mx-1 transition-colors text-[15px] ${
+            pathname === '/dashboard/calendar' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'
           }`}
           style={{ width: 'calc(100% - 8px)' }}
         >
-          <Calendar size={14} />
+          <Calendar size={16} />
           <span className="truncate">{userName}의 캘린더</span>
         </button>
 
-        <div className="px-3 mb-1 flex items-center justify-between">
+        <div className="px-3 mb-1 mt-2 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">페이지</span>
           <button
             onClick={() => createPage(null)}
             className="text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded p-0.5 transition-colors"
             title="새 페이지"
           >
-            <Plus size={14} />
+            <Plus size={15} />
           </button>
         </div>
 
         {loading ? (
-          <div className="px-3 py-2 text-xs text-gray-400">불러오는 중...</div>
+          <div className="px-3 py-2 text-sm text-gray-400">불러오는 중...</div>
         ) : topLevelPages.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-gray-400">페이지가 없어요</div>
+          <div className="px-3 py-2 text-sm text-gray-400">페이지가 없어요</div>
         ) : (
           topLevelPages.map(page => (
             <PageItem
@@ -274,25 +274,25 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         <div className="mt-3 border-t border-gray-200 pt-2">
           <button
             onClick={() => setTrashOpen(o => !o)}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg mx-1 transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-lg mx-1 transition-colors"
           >
-            <Trash2 size={13} />
-            <span className="text-xs font-medium flex-1 text-left">휴지통</span>
+            <Trash2 size={15} />
+            <span className="text-[15px] font-medium flex-1 text-left">휴지통</span>
             {trashedPages.length > 0 && (
               <span className="text-xs bg-gray-200 text-gray-500 rounded-full px-1.5 py-0.5">{trashedPages.length}</span>
             )}
-            {trashOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            {trashOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </button>
 
           {trashOpen && (
             <div className="mt-1">
               {trashedPages.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-gray-400">휴지통이 비어있어요</div>
+                <div className="px-3 py-2 text-sm text-gray-400">휴지통이 비어있어요</div>
               ) : (
                 trashedPages.map(page => (
-                  <div key={page.id} className="group flex items-center gap-1 py-1 mx-1 px-2 rounded-lg text-gray-400">
-                    <FileText size={12} className="shrink-0" />
-                    <span className="text-xs truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
+                  <div key={page.id} className="group flex items-center gap-1 py-1.5 mx-1 px-2 rounded-lg text-gray-400">
+                    <FileText size={13} className="shrink-0" />
+                    <span className="text-sm truncate flex-1 min-w-0">{page.title || '제목 없음'}</span>
                     <span className="text-xs text-gray-300 shrink-0">{daysLeft(page.deleted_at!)}일</span>
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
                       <button
@@ -318,12 +318,12 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         </div>
       </div>
 
-      <div className="p-3 border-t border-gray-200">
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">
-          <div className="w-6 h-6 bg-blue-500 rounded-full text-white text-xs flex items-center justify-center font-medium">
+      <div className="p-4 border-t border-gray-200">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-200 transition-colors">
+          <div className="w-7 h-7 bg-blue-500 rounded-full text-white text-sm flex items-center justify-center font-medium">
             {userName[0]}
           </div>
-          <span className="text-sm text-gray-600 flex-1 truncate">{userName}</span>
+          <span className="text-[15px] text-gray-600 flex-1 truncate">{userName}</span>
           <button onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }} className="text-gray-400 hover:text-gray-700" title="나가기">
             <LogOut size={14} />
           </button>
