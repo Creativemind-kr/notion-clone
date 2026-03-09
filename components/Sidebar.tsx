@@ -110,6 +110,15 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   }, [userName])
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, title } = (e as CustomEvent).detail
+      setPages(prev => prev.map(p => p.id === id ? { ...p, title } : p))
+    }
+    window.addEventListener('page-title-change', handler)
+    return () => window.removeEventListener('page-title-change', handler)
+  }, [])
+
+  useEffect(() => {
     fetchPages()
     const client = supabase.current
     const channel = client

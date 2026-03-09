@@ -285,8 +285,11 @@ export default function EditorWrapper({ page }: { page: Page }) {
             type="text"
             value={title}
             onChange={(e) => {
-              setTitle(e.target.value)
-              scheduleSave(e.target.value, JSON.stringify(editor.getJSON()))
+              const newTitle = e.target.value
+              setTitle(newTitle)
+              titleRef.current = newTitle
+              scheduleSave(newTitle, JSON.stringify(editor.getJSON()))
+              window.dispatchEvent(new CustomEvent('page-title-change', { detail: { id: page.id, title: newTitle } }))
             }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editor?.commands.focus() } }}
             placeholder="제목"
