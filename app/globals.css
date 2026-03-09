@@ -1,16 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
+  --bg: #ffffff;
+  --fg: #0f172a;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* 텍스트 선택 */
+::selection { background: #dbeafe; color: #1e40af; }
 
 /* TipTap Editor */
 .tiptap {
@@ -18,10 +29,11 @@ body {
   min-height: 100%;
   font-size: 16px;
   line-height: 1.75;
+  color: #0f172a;
 }
 
 .tiptap p.is-editor-empty:first-child::before {
-  color: #adb5bd;
+  color: #cbd5e1;
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -31,25 +43,30 @@ body {
 .tiptap h1 {
   font-size: 2em;
   font-weight: 700;
-  margin: 0.7em 0 0.3em;
+  margin: 0.8em 0 0.3em;
   line-height: 1.2;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .tiptap h2 {
   font-size: 1.5em;
   font-weight: 600;
-  margin: 0.6em 0 0.3em;
+  margin: 0.7em 0 0.3em;
   line-height: 1.3;
+  color: #1e293b;
+  letter-spacing: -0.01em;
 }
 
 .tiptap h3 {
-  font-size: 1.25em;
+  font-size: 1.2em;
   font-weight: 600;
-  margin: 0.5em 0 0.3em;
+  margin: 0.5em 0 0.25em;
+  color: #334155;
 }
 
 .tiptap p {
-  margin: 0.25em 0;
+  margin: 0.2em 0;
   line-height: 1.75;
 }
 
@@ -60,55 +77,53 @@ body {
 }
 
 .tiptap li {
-  margin: 0.2em 0;
+  margin: 0.15em 0;
 }
 
 .tiptap blockquote {
-  border-left: 3px solid #e0e0e0;
+  border-left: 3px solid #e2e8f0;
   padding-left: 1em;
-  color: #666;
+  color: #64748b;
   margin: 0.5em 0;
+  font-style: italic;
 }
 
 .tiptap code {
-  background: #f0f0f0;
-  border-radius: 3px;
-  padding: 0.1em 0.3em;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9em;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 0.875em;
+  color: #e11d48;
 }
 
 .tiptap pre {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border-radius: 6px;
-  padding: 1em;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 1.1em 1.25em;
   overflow-x: auto;
-  margin: 0.5em 0;
+  margin: 0.6em 0;
+  font-size: 0.875em;
 }
 
 .tiptap pre code {
   background: none;
+  border: none;
   padding: 0;
   color: inherit;
+  font-size: 1em;
 }
 
-.tiptap strong {
-  font-weight: 700;
-}
-
-.tiptap em {
-  font-style: italic;
-}
-
-.tiptap u {
-  text-decoration: underline;
-}
+.tiptap strong { font-weight: 700; }
+.tiptap em { font-style: italic; }
+.tiptap u { text-decoration: underline; text-underline-offset: 3px; }
 
 .tiptap hr {
   border: none;
-  border-top: 1px solid #e0e0e0;
-  margin: 1em 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 1.25em 0;
 }
 
 /* 체크리스트 */
@@ -119,64 +134,69 @@ body {
 .tiptap ul[data-type="taskList"] li {
   display: flex;
   align-items: flex-start;
-  gap: 0.5em;
+  gap: 0.6em;
 }
 .tiptap ul[data-type="taskList"] li > label {
-  margin-top: 0.15em;
+  margin-top: 0.2em;
 }
 .tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
   width: 1em;
   height: 1em;
   cursor: pointer;
-  accent-color: #333;
+  accent-color: #0f172a;
+  border-radius: 3px;
 }
-.tiptap ul[data-type="taskList"] li > div {
-  flex: 1;
-}
+.tiptap ul[data-type="taskList"] li > div { flex: 1; }
 .tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
   text-decoration: line-through;
-  color: #aaa;
+  color: #94a3b8;
 }
 
 /* 테이블 */
 .tiptap table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.5em 0;
+  margin: 0.6em 0;
   font-size: 0.9em;
 }
 .tiptap th, .tiptap td {
-  border: 1px solid #e0e0e0;
-  padding: 0.5em 0.75em;
+  border: 1px solid #e2e8f0;
+  padding: 0.55em 0.85em;
   min-width: 80px;
   text-align: left;
 }
 .tiptap th {
-  background: #f5f5f5;
+  background: #f8fafc;
   font-weight: 600;
+  color: #475569;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
-.tiptap .selectedCell {
-  background: #e8f4fd;
-}
+.tiptap .selectedCell { background: #eff6ff; }
 
 /* 하이라이트 */
 .tiptap mark {
   border-radius: 3px;
-  padding: 0.1em 0.2em;
+  padding: 0.05em 0.25em;
 }
 
 /* 링크 */
 .tiptap a {
   color: #2563eb;
   text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
+  transition: color 0.15s;
 }
+.tiptap a:hover { color: #1d4ed8; }
 
 /* 이미지 */
 .tiptap img {
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: 8px;
   margin: 0.5em 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
 /* 접기 블록 */
@@ -187,7 +207,6 @@ body {
   margin: 0.2em 0;
 }
 
-/* 토글 버튼 (▶ 화살표) */
 .tiptap [data-type="details"] > button {
   display: flex;
   align-items: center;
@@ -198,28 +217,19 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: #94a3b8;
   font-size: 0.65em;
   flex-shrink: 0;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, color 0.15s;
   margin-top: 0.25em;
 }
 
-.tiptap [data-type="details"] > button::before {
-  content: '▶';
-}
+.tiptap [data-type="details"] > button:hover { color: #475569; }
+.tiptap [data-type="details"] > button::before { content: '▶'; }
+.tiptap [data-type="details"].is-open > button { transform: rotate(90deg); }
 
-.tiptap [data-type="details"].is-open > button {
-  transform: rotate(90deg);
-}
+.tiptap [data-type="details"] > div { flex: 1; min-width: 0; }
 
-/* 요약+내용 감싸는 div */
-.tiptap [data-type="details"] > div {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 요약 텍스트 */
 .tiptap [data-type="details"] summary {
   display: block;
   cursor: text;
@@ -230,18 +240,11 @@ body {
   line-height: 1.75;
   outline: none;
 }
+.tiptap [data-type="details"] summary::-webkit-details-marker { display: none; }
 
-.tiptap [data-type="details"] summary::-webkit-details-marker {
-  display: none;
-}
-
-/* 접힌 내용 영역 */
 [data-type="detailsContent"] {
-  padding-left: 0.75em;
-  border-left: 2px solid #e5e7eb;
-  margin-top: 0.15em;
+  padding-left: 0.85em;
+  border-left: 2px solid #e2e8f0;
+  margin-top: 0.2em;
 }
-
-[data-type="detailsContent"][hidden] {
-  display: none !important;
-}
+[data-type="detailsContent"][hidden] { display: none !important; }
