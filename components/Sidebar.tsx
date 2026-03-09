@@ -470,7 +470,15 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       .insert({ title: '제목 없음', content: '', author_name: userName, parent_id: parentId })
       .select().single()
     if (error) { alert('오류: ' + error.message); return }
-    if (data) { await fetchPages(); router.push(`/dashboard/page/${data.id}`) }
+    if (data) {
+      // fetchPages() 대신 직접 상태 업데이트 → expanded 상태 유지
+      setPages(prev => [...prev, data])
+      const key = parentId ?? 'root'
+      const newMap = { ...orderMapRef.current }
+      newMap[key] = [...(newMap[key] ?? []), data.id]
+      saveOrderMap(newMap)
+      router.push(`/dashboard/page/${data.id}`)
+    }
   }
 
   const deletePage = async (e: React.MouseEvent, pageId: string) => {

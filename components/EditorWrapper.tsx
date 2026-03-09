@@ -25,12 +25,20 @@ import {
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
-  ExternalLink, Copy, Pencil, Unlink,
+  ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
 
 interface Page { id: string; title: string; content: string }
+
+interface OgPreview {
+  title?: string | null
+  description?: string | null
+  image?: string | null
+  favicon?: string | null
+  url: string
+}
 
 const HIGHLIGHT_COLORS = [
   { label: '노랑', value: '#FFF176' },
@@ -52,6 +60,22 @@ const COLORS = [
   '#c2255c', '#868e96', '#ced4da', '#ffffff',
 ]
 
+function extractLinks(doc: Record<string, unknown>): string[] {
+  const links: string[] = []
+  function traverse(node: Record<string, unknown>) {
+    const marks = node.marks as Array<{ type: string; attrs?: { href?: string } }> | undefined
+    if (marks) {
+      for (const mark of marks) {
+        if (mark.type === 'link' && mark.attrs?.href) links.push(mark.attrs.href)
+      }
+    }
+    const content = node.content as Array<Record<string, unknown>> | undefined
+    if (content) for (const child of content) traverse(child)
+  }
+  traverse(doc)
+  return [...new Set(links)]
+}
+
 export default function EditorWrapper({ page }: { page: Page }) {
   const [title, setTitle] = useState(page.title)
   const [saving, setSaving] = useState(false)
@@ -62,6 +86,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; anchor: number } | null>(null)
   const [linkPopup, setLinkPopup] = useState<{ href: string; x: number; y: number } | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [imageModal, setImageModal] = useState<{ src: string } | null>(null)
+  const [imgCtxMenu, setImgCtxMenu] = useState<{ x: number; y: number; src: string } | null>(null)
+  const [imgCopied, setImgCopied] = useState(false)
+  const [docLinks, setDocLinks] = useState<string[]>([])
+  const [linkPreviews, setLinkPreviews] = useState<Record<string, OgPreview>>({})
+  const fetchedUrls = useRef<Set<string>>(new Set())
   const isMounted = useRef(true)
   const titleRef = useRef(title)
 
@@ -75,9 +105,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
 
-  useEffect(() => {
-    titleRef.current = title
-  }, [title])
+  useEffect(() => { titleRef.current = title }, [title])
 
   useEffect(() => {
     isMounted.current = true
@@ -88,7 +116,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
   }, [])
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null) }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setCtxMenu(null); setImgCtxMenu(null); setImageModal(null) }
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
@@ -206,6 +236,32 @@ export default function EditorWrapper({ page }: { page: Page }) {
     return () => { editor.off('selectionUpdate', handler) }
   }, [editor])
 
+  // 링크 추출 + OG 미리보기 패치
+  useEffect(() => {
+    if (!editor) return undefined
+    const syncLinks = () => {
+      const links = extractLinks(editor.getJSON() as Record<string, unknown>)
+      setDocLinks(links)
+      links.forEach(async (url) => {
+        if (fetchedUrls.current.has(url)) return
+        fetchedUrls.current.add(url)
+        try {
+          const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
+          if (res.ok) {
+            const data: OgPreview = await res.json()
+            if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: data }))
+          }
+        } catch {
+          // 패치 실패 시 기본값
+          if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: { url } }))
+        }
+      })
+    }
+    editor.on('update', syncLinks)
+    syncLinks()
+    return () => { editor.off('update', syncLinks) }
+  }, [editor])
+
   const setLink = () => {
     if (!editor) return
     const prev = editor.getAttributes('link').href
@@ -215,9 +271,63 @@ export default function EditorWrapper({ page }: { page: Page }) {
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
   }
 
+  const copyImageToClipboard = async (src: string) => {
+    try {
+      const res = await fetch(src)
+      const blob = await res.blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+    } catch {
+      // data URL fallback: 주소 복사
+      await navigator.clipboard.writeText(src)
+    }
+    setImgCopied(true)
+    setTimeout(() => setImgCopied(false), 2000)
+  }
+
+  const deleteImageFromEditor = (src: string) => {
+    if (!editor) return
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'image' && node.attrs.src === src) {
+        editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run()
+        return false
+      }
+    })
+  }
+
+  const handleEditorClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'IMG') {
+      setImageModal({ src: (target as HTMLImageElement).src })
+      return
+    }
+    setShowColorPicker(false)
+    setCtxMenu(null)
+    setImgCtxMenu(null)
+  }
+
+  const handleEditorContextMenu = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'IMG') {
+      e.preventDefault()
+      setImgCtxMenu({
+        x: Math.min(e.clientX, window.innerWidth - 220),
+        y: Math.min(e.clientY, window.innerHeight - 200),
+        src: (target as HTMLImageElement).src,
+      })
+      return
+    }
+    if (!editor || editor.state.selection.empty) return
+    e.preventDefault()
+    const x = Math.min(e.clientX, window.innerWidth - 240)
+    const y = Math.min(e.clientY, window.innerHeight - 320)
+    setCtxMenu({ x, y, anchor: editor.state.selection.anchor })
+  }
+
   const currentColor = editor?.getAttributes('textStyle')?.color || '#1a1a1a'
 
   if (!editor) return null
+
+  const previewLinks = docLinks.filter(u => linkPreviews[u])
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -330,38 +440,185 @@ export default function EditorWrapper({ page }: { page: Page }) {
         </span>
       </div>
 
-      {/* 에디터 */}
-      <div
-        className="flex-1 overflow-y-auto"
-        onClick={() => { setShowColorPicker(false); setCtxMenu(null) }}
-        onContextMenu={(e) => {
-          if (!editor || editor.state.selection.empty) return
-          e.preventDefault()
-          const x = Math.min(e.clientX, window.innerWidth - 240)
-          const y = Math.min(e.clientY, window.innerHeight - 320)
-          setCtxMenu({ x, y, anchor: editor.state.selection.anchor })
-        }}
-      >
-        <div className="max-w-5xl mx-auto px-8 py-12">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => {
-              const newTitle = e.target.value
-              setTitle(newTitle)
-              titleRef.current = newTitle
-              scheduleSave(newTitle, JSON.stringify(editor.getJSON()))
-              window.dispatchEvent(new CustomEvent('page-title-change', { detail: { id: page.id, title: newTitle } }))
-            }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editor?.commands.focus() } }}
-            placeholder="제목"
-            className="w-full text-[2.5rem] font-bold text-slate-900 outline-none placeholder-slate-200 mb-8 bg-transparent leading-tight tracking-tight"
-          />
-          <EditorContent editor={editor} className="tiptap" />
+      {/* 메인 콘텐츠 영역 */}
+      <div className="flex flex-1 min-h-0">
+        {/* 에디터 */}
+        <div
+          className="flex-1 overflow-y-auto"
+          onClick={handleEditorClick}
+          onContextMenu={handleEditorContextMenu}
+        >
+          <div className="max-w-3xl mx-auto px-8 py-12">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => {
+                const newTitle = e.target.value
+                setTitle(newTitle)
+                titleRef.current = newTitle
+                scheduleSave(newTitle, JSON.stringify(editor.getJSON()))
+                window.dispatchEvent(new CustomEvent('page-title-change', { detail: { id: page.id, title: newTitle } }))
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editor?.commands.focus() } }}
+              placeholder="제목"
+              className="w-full text-[2.5rem] font-bold text-slate-900 outline-none placeholder-slate-200 mb-8 bg-transparent leading-tight tracking-tight"
+            />
+            <EditorContent editor={editor} className="tiptap" />
+          </div>
         </div>
+
+        {/* 링크 미리보기 우측 패널 */}
+        {previewLinks.length > 0 && (
+          <div className="w-64 shrink-0 border-l border-slate-100 overflow-y-auto bg-slate-50/50">
+            <div className="p-3">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 px-1">링크</p>
+              <div className="space-y-2">
+                {previewLinks.map((url) => {
+                  const p = linkPreviews[url]
+                  return (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-white border border-slate-100 rounded-xl overflow-hidden hover:border-slate-300 hover:shadow-sm transition-all group"
+                    >
+                      {p.image && (
+                        <div className="w-full h-28 bg-slate-100 overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={p.image}
+                            alt=""
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                        </div>
+                      )}
+                      <div className="p-2.5">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {p.favicon ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.favicon} alt="" className="w-3.5 h-3.5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          ) : (
+                            <Globe size={11} className="text-slate-300 shrink-0" />
+                          )}
+                          <span className="text-[10px] text-slate-400 truncate">
+                            {(() => { try { return new URL(url).hostname } catch { return url } })()}
+                          </span>
+                        </div>
+                        {p.title && (
+                          <p className="text-[12px] font-semibold text-slate-800 leading-tight line-clamp-2 mb-0.5">{p.title}</p>
+                        )}
+                        {p.description && (
+                          <p className="text-[11px] text-slate-400 leading-tight line-clamp-2">{p.description}</p>
+                        )}
+                        {!p.title && !p.description && (
+                          <p className="text-[11px] text-slate-400 truncate">{url}</p>
+                        )}
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 우클릭 컨텍스트 메뉴 */}
+      {/* 이미지 확대 모달 */}
+      {imageModal && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setImageModal(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors"
+            onClick={() => setImageModal(null)}
+          >
+            <X size={20} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageModal.src}
+            alt=""
+            className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
+
+      {/* 이미지 우클릭 컨텍스트 메뉴 */}
+      {imgCtxMenu && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl w-48 py-1.5 text-sm"
+          style={{ left: imgCtxMenu.x, top: imgCtxMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => { setImageModal({ src: imgCtxMenu.src }); setImgCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+          >
+            <ZoomIn size={13} className="text-gray-400" />
+            이미지 확대
+          </button>
+          <button
+            onClick={async () => {
+              await copyImageToClipboard(imgCtxMenu.src)
+              setImgCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+          >
+            <Copy size={13} className="text-gray-400" />
+            {imgCopied ? '복사됨!' : '이미지 복사'}
+          </button>
+          <button
+            onClick={async () => {
+              await copyImageToClipboard(imgCtxMenu.src)
+              deleteImageFromEditor(imgCtxMenu.src)
+              setImgCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+          >
+            <Scissors size={13} className="text-gray-400" />
+            잘라내기
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(imgCtxMenu.src)
+              setImgCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+          >
+            <Link2 size={13} className="text-gray-400" />
+            URL 복사
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          <button
+            onClick={() => {
+              const pasteArea = document.activeElement as HTMLElement
+              if (pasteArea) pasteArea.focus()
+              document.execCommand('paste')
+              setImgCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left"
+          >
+            <Clipboard size={13} className="text-gray-400" />
+            붙여넣기
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          <button
+            onClick={() => { deleteImageFromEditor(imgCtxMenu.src); setImgCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-red-500 hover:bg-red-50 transition-colors text-left"
+          >
+            <X size={13} />
+            이미지 삭제
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* 텍스트 우클릭 컨텍스트 메뉴 */}
       {ctxMenu && typeof window !== 'undefined' && createPortal(
         <div
           className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl w-56 py-2 text-sm"
