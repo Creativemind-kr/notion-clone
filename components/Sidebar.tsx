@@ -237,7 +237,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           style={{ width: 'calc(100% - 8px)' }}
         >
           <Calendar size={14} />
-          <span>캘린더</span>
+          <span className="truncate">{userName}의 캘린더</span>
         </button>
 
         <div className="px-3 mb-1 flex items-center justify-between">

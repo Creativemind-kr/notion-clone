@@ -9,6 +9,8 @@ interface CalendarEvent {
   id: string
   title: string
   date: string
+  time: string | null
+  description: string | null
   color: string
   author_name: string
 }
@@ -35,6 +37,8 @@ export default function CalendarView({ userName }: { userName: string }) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [modal, setModal] = useState<{ date: string } | null>(null)
   const [newTitle, setNewTitle] = useState('')
+  const [newTime, setNewTime] = useState('')
+  const [newDesc, setNewDesc] = useState('')
   const [newColor, setNewColor] = useState(EVENT_COLORS[0].value)
   const [saving, setSaving] = useState(false)
   const supabase = useRef(createClient())
@@ -68,6 +72,8 @@ export default function CalendarView({ userName }: { userName: string }) {
   const openModal = (dateStr: string) => {
     setModal({ date: dateStr })
     setNewTitle('')
+    setNewTime('')
+    setNewDesc('')
     setNewColor(EVENT_COLORS[0].value)
   }
 
@@ -76,10 +82,17 @@ export default function CalendarView({ userName }: { userName: string }) {
     setSaving(true)
     const { data } = await supabase.current
       .from('events')
-      .insert({ title: newTitle.trim(), date: modal.date, color: newColor, author_name: userName })
+      .insert({
+        title: newTitle.trim(),
+        date: modal.date,
+        time: newTime || null,
+        description: newDesc.trim() || null,
+        color: newColor,
+        author_name: userName,
+      })
       .select()
       .single()
-    if (data) setEvents(prev => [...prev, data])
+    if (data) setEvents(prev => [...prev, data].sort((a, b) => (a.time || '').localeCompare(b.time || '')))
     setSaving(false)
     setModal(null)
   }
@@ -169,7 +182,12 @@ export default function CalendarView({ userName }: { userName: string }) {
                       className="flex items-center gap-1 rounded px-1 py-0.5 group/event"
                       style={{ backgroundColor: event.color + '20', borderLeft: `2px solid ${event.color}` }}
                     >
-                      <span className="text-xs truncate flex-1" style={{ color: event.color }}>{event.title}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          {event.time && <span className="text-xs shrink-0" style={{ color: event.color }}>{event.time}</span>}
+                          <span className="text-xs truncate" style={{ color: event.color }}>{event.title}</span>
+                        </div>
+                      </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteEvent(event.id) }}
                         className="opacity-0 group-hover/event:opacity-100 shrink-0"
@@ -203,8 +221,23 @@ export default function CalendarView({ userName }: { userName: string }) {
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addEvent()}
-              placeholder="일정 제목"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-3"
+              placeholder="일정 제목 *"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-2"
+            />
+
+            <input
+              type="time"
+              value={newTime}
+              onChange={e => setNewTime(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-2 text-gray-600"
+            />
+
+            <textarea
+              value={newDesc}
+              onChange={e => setNewDesc(e.target.value)}
+              placeholder="설명 (선택)"
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-3 resize-none"
             />
 
             <div className="flex gap-2 mb-4">
