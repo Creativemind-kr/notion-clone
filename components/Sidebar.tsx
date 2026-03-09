@@ -62,7 +62,7 @@ function getZone(e: React.DragEvent): DropZone {
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
   dragId, dragOver, onDragStart, onDragOver, onDrop, onDragEnd,
-  onMoveUp, onMoveDown,
+  onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
@@ -74,8 +74,10 @@ function PageItem({
   onDragEnd: () => void
   onMoveUp: (id: string, parentId: string | null) => void
   onMoveDown: (id: string, parentId: string | null) => void
+  collapsedIds: Set<string>
+  onToggleCollapsed: (id: string) => void
 }) {
-  const [expanded, setExpanded] = useState(true)
+  const expanded = !collapsedIds.has(page.id)
   const children = allPages.filter(p => p.parent_id === page.id)
   const isActive = pathname === `/dashboard/page/${page.id}`
   const isDragging = dragId === page.id
@@ -145,7 +147,7 @@ function PageItem({
 
         {/* Expand/collapse */}
         <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
+          onClick={(e) => { e.stopPropagation(); onToggleCollapsed(page.id) }}
           className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'}`}
         >
           {children.length > 0
@@ -224,6 +226,7 @@ function PageItem({
               onDragStart={onDragStart} onDragOver={onDragOver}
               onDrop={onDrop} onDragEnd={onDragEnd}
               onMoveUp={onMoveUp} onMoveDown={onMoveDown}
+              collapsedIds={collapsedIds} onToggleCollapsed={onToggleCollapsed}
             />
           ))}
         </div>
@@ -241,6 +244,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const [trashedPages, setTrashedPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const [trashOpen, setTrashOpen] = useState(false)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   // orderMap: { [parentId | 'root']: string[] }
   const [orderMap, setOrderMap] = useState<Record<string, string[]>>({})
   const [dragId, setDragId] = useState<string | null>(null)
@@ -268,6 +272,24 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         orderMapRef.current = parsed
       }
     } catch {}
+  }, [userName])
+
+  // Load collapsed state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`page-collapsed-${userName}`)
+      if (saved) setCollapsedIds(new Set(JSON.parse(saved)))
+    } catch {}
+  }, [userName])
+
+  const toggleCollapsed = useCallback((id: string) => {
+    setCollapsedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      localStorage.setItem(`page-collapsed-${userName}`, JSON.stringify([...next]))
+      return next
+    })
   }, [userName])
 
   const saveOrderMap = useCallback((map: Record<string, string[]>) => {
@@ -617,6 +639,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
                 onDragStart={handleDragStart} onDragOver={handleDragOver}
                 onDrop={handleDrop} onDragEnd={handleDragEnd}
                 onMoveUp={handleMoveUp} onMoveDown={handleMoveDown}
+                collapsedIds={collapsedIds} onToggleCollapsed={toggleCollapsed}
               />
             ))}
           </div>
