@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, FilePlus, RotateCcw, X, Calendar, GripVertical, ChevronsUp, ChevronsDown } from 'lucide-react'
+import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronUp, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
 
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -72,8 +72,8 @@ function PageItem({
   onDragOver: (id: string, zone: DropZone) => void
   onDrop: (e: React.DragEvent, id: string, zone: DropZone) => void
   onDragEnd: () => void
-  onMoveFirst: (id: string, parentId: string | null) => void
-  onMoveLast: (id: string, parentId: string | null) => void
+  onMoveUp: (id: string, parentId: string | null) => void
+  onMoveDown: (id: string, parentId: string | null) => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const children = allPages.filter(p => p.parent_id === page.id)
@@ -109,7 +109,25 @@ function PageItem({
 
       <div
         draggable
-        onDragStart={(e) => onDragStart(e, page.id)}
+        onDragStart={(e) => {
+          // Custom drag preview badge
+          const ghost = document.createElement('div')
+          ghost.textContent = page.title || '제목 없음'
+          Object.assign(ghost.style, {
+            position: 'fixed', top: '-200px', left: '0',
+            background: '#1e293b', color: '#f8fafc',
+            padding: '5px 12px', borderRadius: '8px',
+            fontSize: '12px', fontWeight: '500',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            whiteSpace: 'nowrap', maxWidth: '220px',
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            pointerEvents: 'none',
+          })
+          document.body.appendChild(ghost)
+          e.dataTransfer.setDragImage(ghost, 16, 20)
+          requestAnimationFrame(() => document.body.removeChild(ghost))
+          onDragStart(e, page.id)
+        }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(page.id, getZone(e)) }}
         onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(e, page.id, getZone(e)) }}
         onDragEnd={onDragEnd}
@@ -151,18 +169,18 @@ function PageItem({
         {/* Actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
           <button
-            onClick={(e) => { e.stopPropagation(); onMoveFirst(page.id, page.parent_id) }}
+            onClick={(e) => { e.stopPropagation(); onMoveUp(page.id, page.parent_id) }}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
-            title="맨 위로"
+            title="한 칸 위로"
           >
-            <ChevronsUp size={11} />
+            <ChevronUp size={11} />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onMoveLast(page.id, page.parent_id) }}
+            onClick={(e) => { e.stopPropagation(); onMoveDown(page.id, page.parent_id) }}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
-            title="맨 아래로"
+            title="한 칸 아래로"
           >
-            <ChevronsDown size={11} />
+            <ChevronDown size={11} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onCreateChild(page.id) }}
@@ -205,7 +223,7 @@ function PageItem({
               dragId={dragId} dragOver={dragOver}
               onDragStart={onDragStart} onDragOver={onDragOver}
               onDrop={onDrop} onDragEnd={onDragEnd}
-              onMoveFirst={onMoveFirst} onMoveLast={onMoveLast}
+              onMoveUp={onMoveUp} onMoveDown={onMoveDown}
             />
           ))}
         </div>
@@ -411,37 +429,40 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     }
   }, [])
 
-  const handleMoveFirst = useCallback((id: string, parentId: string | null) => {
+  const getSortedLevelIds = useCallback((parentId: string | null) => {
     const key = parentId ?? 'root'
-    const pages = pagesRef.current
-    const levelIds = pages.filter(p => p.parent_id === parentId).map(p => p.id)
-    const currentOrder = orderMapRef.current[key] ?? []
-    const sorted = [...levelIds].sort((a, b) => {
-      const ai = currentOrder.indexOf(a), bi = currentOrder.indexOf(b)
+    const levelIds = pagesRef.current.filter(p => p.parent_id === parentId).map(p => p.id)
+    const order = orderMapRef.current[key] ?? []
+    return [...levelIds].sort((a, b) => {
+      const ai = order.indexOf(a), bi = order.indexOf(b)
       if (ai === -1 && bi === -1) return 0; if (ai === -1) return 1; if (bi === -1) return -1
       return ai - bi
     })
-    const newOrder = [id, ...sorted.filter(i => i !== id)]
-    const newMap = { ...orderMapRef.current, [key]: newOrder }
-    setOrderMap(newMap); orderMapRef.current = newMap
-    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName])
+  }, [])
 
-  const handleMoveLast = useCallback((id: string, parentId: string | null) => {
+  const handleMoveUp = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    const pages = pagesRef.current
-    const levelIds = pages.filter(p => p.parent_id === parentId).map(p => p.id)
-    const currentOrder = orderMapRef.current[key] ?? []
-    const sorted = [...levelIds].sort((a, b) => {
-      const ai = currentOrder.indexOf(a), bi = currentOrder.indexOf(b)
-      if (ai === -1 && bi === -1) return 0; if (ai === -1) return 1; if (bi === -1) return -1
-      return ai - bi
-    })
-    const newOrder = [...sorted.filter(i => i !== id), id]
+    const sorted = getSortedLevelIds(parentId)
+    const idx = sorted.indexOf(id)
+    if (idx <= 0) return
+    const newOrder = [...sorted]
+    ;[newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]
     const newMap = { ...orderMapRef.current, [key]: newOrder }
     setOrderMap(newMap); orderMapRef.current = newMap
     localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-  }, [userName])
+  }, [userName, getSortedLevelIds])
+
+  const handleMoveDown = useCallback((id: string, parentId: string | null) => {
+    const key = parentId ?? 'root'
+    const sorted = getSortedLevelIds(parentId)
+    const idx = sorted.indexOf(id)
+    if (idx < 0 || idx >= sorted.length - 1) return
+    const newOrder = [...sorted]
+    ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
+    const newMap = { ...orderMapRef.current, [key]: newOrder }
+    setOrderMap(newMap); orderMapRef.current = newMap
+    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
+  }, [userName, getSortedLevelIds])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
@@ -568,7 +589,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
                 dragId={dragId} dragOver={dragOver}
                 onDragStart={handleDragStart} onDragOver={handleDragOver}
                 onDrop={handleDrop} onDragEnd={handleDragEnd}
-                onMoveFirst={handleMoveFirst} onMoveLast={handleMoveLast}
+                onMoveUp={handleMoveUp} onMoveDown={handleMoveDown}
               />
             ))}
           </div>
