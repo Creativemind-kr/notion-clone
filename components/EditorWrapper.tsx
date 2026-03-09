@@ -56,7 +56,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  const supabase = createClient()
+  const supabase = useRef(createClient())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedSelection = useRef<{ from: number; to: number } | null>(null)
 
@@ -90,7 +90,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
     if (!isMounted.current) return
     setSaving(true)
     setSaveError(false)
-    const { error } = await supabase.from('pages').update({ title: newTitle, content, updated_at: new Date().toISOString() }).eq('id', page.id)
+    const { error } = await supabase.current.from('pages').update({ title: newTitle, content, updated_at: new Date().toISOString() }).eq('id', page.id)
     if (!isMounted.current) return
     setSaving(false)
     if (error) {
@@ -99,12 +99,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
     } else {
       setSaved(true)
     }
-  }, [supabase, page.id])
+  }, [page.id])
 
   const scheduleSave = useCallback((newTitle: string, content: string) => {
     setSaved(false)
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => save(newTitle, content), 1000)
+    saveTimer.current = setTimeout(() => save(newTitle, content), 500)
   }, [save])
 
   const editor = useEditor({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import EditorWrapper from '@/components/EditorWrapper'
@@ -16,10 +16,10 @@ export default function PageDetail() {
   const id = params.id as string
   const [page, setPage] = useState<Page | null>(null)
   const [notFound, setNotFound] = useState(false)
-  const supabase = createClient()
+  const supabase = useRef(createClient())
 
   useEffect(() => {
-    supabase
+    supabase.current
       .from('pages')
       .select('*')
       .eq('id', id)
@@ -28,7 +28,7 @@ export default function PageDetail() {
         if (data) setPage(data)
         else setNotFound(true)
       })
-  }, [id, supabase])
+  }, [id])
 
   if (notFound) return (
     <div className="flex items-center justify-center h-full text-gray-400">
