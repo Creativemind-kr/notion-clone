@@ -17,6 +17,7 @@ import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
 import Details, { DetailsSummary, DetailsContent } from '@tiptap/extension-details'
+import { insertToggleBlock } from '@/lib/editor-toggle'
 import { SlashCommands } from './SlashCommands'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -57,7 +58,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [saveError, setSaveError] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; anchor: number } | null>(null)
   const isMounted = useRef(true)
   const titleRef = useRef(title)
 
@@ -290,24 +291,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <button
           onMouseDown={(e) => {
             e.preventDefault()
-            const { state, chain } = editor
-            const { $from } = state.selection
-            const depth = $from.depth
-            const parentPos = $from.before(depth)
-            const parentNode = $from.node(depth)
-            const parentEnd = parentPos + parentNode.nodeSize
-            const inlineContent = parentNode.content.toJSON() || []
-            chain().focus().insertContentAt(
-              { from: parentPos, to: parentEnd },
-              {
-                type: 'details',
-                attrs: { open: true },
-                content: [
-                  { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
-                  { type: 'detailsContent', content: [{ type: 'paragraph' }] },
-                ],
-              }
-            ).run()
+            insertToggleBlock(editor)
           }}
           title="접기 블록"
           className={`p-1.5 rounded transition-colors flex items-center gap-0.5 ${editor.isActive('details') ? 'bg-gray-200' : 'hover:bg-gray-100 text-gray-500'}`}
@@ -338,7 +322,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
           e.preventDefault()
           const x = Math.min(e.clientX, window.innerWidth - 240)
           const y = Math.min(e.clientY, window.innerHeight - 320)
-          setCtxMenu({ x, y })
+          setCtxMenu({ x, y, anchor: editor.state.selection.anchor })
         }}
       >
         <div className="max-w-3xl mx-auto px-8 py-10">
@@ -454,24 +438,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
           <div className="px-3">
             <button
               onClick={() => {
-                const { state, chain } = editor
-                const { $from } = state.selection
-                const depth = $from.depth
-                const parentPos = $from.before(depth)
-                const parentNode = $from.node(depth)
-                const parentEnd = parentPos + parentNode.nodeSize
-                const inlineContent = parentNode.content.toJSON() || []
-                chain().focus().insertContentAt(
-                  { from: parentPos, to: parentEnd },
-                  {
-                    type: 'details',
-                    attrs: { open: true },
-                    content: [
-                      { type: 'detailsSummary', content: inlineContent.length > 0 ? inlineContent : undefined },
-                      { type: 'detailsContent', content: [{ type: 'paragraph' }] },
-                    ],
-                  }
-                ).run()
+                insertToggleBlock(editor, ctxMenu?.anchor)
                 setCtxMenu(null)
               }}
               className="w-full flex items-center gap-2 py-1 text-sm text-gray-700 hover:text-gray-900"
