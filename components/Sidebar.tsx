@@ -51,10 +51,12 @@ function daysLeft(deletedAt: string) {
   return Math.max(7 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000), 0)
 }
 
+const NULL_SORT_ORDER = 2_147_483_647 // PostgreSQL integer 최댓값
+
 function sortSiblings(pages: Page[]): Page[] {
   return [...pages].sort((a, b) => {
-    const ao = a.sort_order ?? Infinity
-    const bo = b.sort_order ?? Infinity
+    const ao = a.sort_order ?? NULL_SORT_ORDER
+    const bo = b.sort_order ?? NULL_SORT_ORDER
     if (ao !== bo) return ao - bo
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   })
@@ -368,11 +370,11 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   // ── sort_order 일괄 DB 업데이트 ───────────────────────────────────────────
   const updateSortOrders = useCallback(async (ids: string[]) => {
     await Promise.all(
-      ids.map((id, idx) => supabase.current.from('pages').update({ sort_order: idx }).eq('id', id))
+      ids.map((id, idx) => supabase.current.from('pages').update({ sort_order: Math.floor(idx) }).eq('id', id))
     )
     setPages(prev => prev.map(p => {
       const idx = ids.indexOf(p.id)
-      return idx >= 0 ? { ...p, sort_order: idx } : p
+      return idx >= 0 ? { ...p, sort_order: Math.floor(idx) } : p
     }))
   }, [])
 
@@ -517,8 +519,8 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   // ── Sorted lists ──────────────────────────────────────────────────────────
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
-    const ao = a.sort_order ?? Infinity
-    const bo = b.sort_order ?? Infinity
+    const ao = a.sort_order ?? NULL_SORT_ORDER
+    const bo = b.sort_order ?? NULL_SORT_ORDER
     if (ao !== bo) return ao - bo
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   })
