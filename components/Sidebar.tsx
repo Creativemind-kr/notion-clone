@@ -39,7 +39,7 @@ interface Page {
   deleted_at?: string | null
 }
 
-type DropZone = 'before' | 'into' | 'after'
+type DropZone = 'before' | 'after'
 interface DragOverState { id: string; zone: DropZone }
 
 function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolean {
@@ -54,9 +54,7 @@ function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolea
 function getZone(e: React.DragEvent): DropZone {
   const rect = e.currentTarget.getBoundingClientRect()
   const y = e.clientY - rect.top
-  if (y < rect.height * 0.28) return 'before'
-  if (y > rect.height * 0.72) return 'after'
-  return 'into'
+  return y < rect.height * 0.5 ? 'before' : 'after'
 }
 
 function PageItem({
@@ -91,8 +89,6 @@ function PageItem({
 
   const rowCls = isDragging
     ? 'opacity-30'
-    : activeZone === 'into'
-    ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset'
     : isActive
     ? 'bg-slate-900 text-white'
     : depth === 0
@@ -395,57 +391,35 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const targetPage = pages.find(p => p.id === targetId)
     if (!sourcePage || !targetPage) return
 
-    if (zone === 'into') {
-      // Cannot drop into own descendant
-      if (isDescendant(sourceId, targetId, pages)) return
+    // before / after: reorder at same level only
+    const newParentId = targetPage.parent_id
+    const oldParentId = sourcePage.parent_id
+    const newKey = newParentId ?? 'root'
+    const oldKey = oldParentId ?? 'root'
 
-      const oldKey = sourcePage.parent_id ?? 'root'
-      const newKey = targetId
+    if (newParentId !== null && isDescendant(sourceId, newParentId, pages)) return
 
-      // Update local state + order map immediately (UI 즉시 반영)
-      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
-      const newMap = { ...orderMapRef.current }
+    if (oldParentId !== newParentId) {
+      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
+    }
+
+    const levelIds = sortedPagesRef.current
+      .filter(p => p.parent_id === newParentId && p.id !== sourceId)
+      .map(p => p.id)
+
+    const targetIdx = levelIds.indexOf(targetId)
+    const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
+    levelIds.splice(insertAt, 0, sourceId)
+
+    const newMap = { ...orderMapRef.current }
+    newMap[newKey] = levelIds
+    if (oldKey !== newKey) {
       newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
-      newMap[newKey] = [...(newMap[newKey] ?? []), sourceId]
-      saveOrderMap(newMap)
+    }
+    saveOrderMap(newMap)
 
-      // Update DB (await는 UI 반영 후)
-      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
-
-    } else {
-      // before / after: reorder at same level, or reparent + reorder
-      const newParentId = targetPage.parent_id
-      const oldParentId = sourcePage.parent_id
-      const newKey = newParentId ?? 'root'
-      const oldKey = oldParentId ?? 'root'
-
-      if (newParentId !== null && isDescendant(sourceId, newParentId, pages)) return
-
-      if (oldParentId !== newParentId) {
-        setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
-      }
-
-      // Use the exact visual order from sortedPagesRef (same as what handleMoveUp/Down uses)
-      const levelIds = sortedPagesRef.current
-        .filter(p => p.parent_id === newParentId && p.id !== sourceId)
-        .map(p => p.id)
-
-      const targetIdx = levelIds.indexOf(targetId)
-      const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
-      levelIds.splice(insertAt, 0, sourceId)
-
-      const newMap = { ...orderMapRef.current }
-      newMap[newKey] = levelIds
-      if (oldKey !== newKey) {
-        newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
-      }
-      // order map 먼저 저장 (UI 즉시 반영)
-      saveOrderMap(newMap)
-
-      // DB 업데이트는 그 다음 (reparenting인 경우만)
-      if (oldParentId !== newParentId) {
-        await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
-      }
+    if (oldParentId !== newParentId) {
+      await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
     }
   }, [saveOrderMap])
 
