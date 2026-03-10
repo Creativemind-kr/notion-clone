@@ -293,9 +293,14 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   }, [userName])
 
   const saveOrderMap = useCallback((map: Record<string, string[]>) => {
-    setOrderMap(map)
-    orderMapRef.current = map
-    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(map))
+    // 각 그룹에서 중복 ID 제거
+    const deduped: Record<string, string[]> = {}
+    for (const [key, ids] of Object.entries(map)) {
+      deduped[key] = [...new Set(ids)]
+    }
+    setOrderMap(deduped)
+    orderMapRef.current = deduped
+    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(deduped))
   }, [userName])
 
   const fetchPages = useCallback(async () => {
@@ -508,12 +513,14 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       .select().single()
     if (error) { alert('오류: ' + error.message); return }
     if (data) {
-      // fetchPages() 대신 직접 상태 업데이트 → expanded 상태 유지
-      setPages(prev => [...prev, data])
+      // fetchPages() 대신 직접 상태 업데이트 → expanded 상태 유지 (중복 방지)
+      setPages(prev => prev.find(p => p.id === data.id) ? prev : [...prev, data])
       const key = parentId ?? 'root'
       const newMap = { ...orderMapRef.current }
-      newMap[key] = [...(newMap[key] ?? []), data.id]
-      saveOrderMap(newMap)
+      if (!(newMap[key] ?? []).includes(data.id)) {
+        newMap[key] = [...(newMap[key] ?? []), data.id]
+        saveOrderMap(newMap)
+      }
       router.push(`/dashboard/page/${data.id}`)
     }
   }
