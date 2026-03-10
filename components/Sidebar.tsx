@@ -399,10 +399,22 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const newKey = newParentId ?? 'root'
     const oldKey = oldParentId ?? 'root'
 
-    // 같은 레벨 재정렬: source를 제외한 siblings를 현재 순서대로 가져와 삽입 위치 계산
-    const siblings = getSortedGroup(newParentId, sourceId)
-    const targetIdx = siblings.findIndex(p => p.id === targetId)
-    const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
+    // 현재 그룹 전체 순서 (source 포함)
+    const fullGroup = getSortedGroup(newParentId)
+    const sourceCurrentIdx = fullGroup.findIndex(p => p.id === sourceId)
+    const targetCurrentIdx = fullGroup.findIndex(p => p.id === targetId)
+
+    // source 제외 siblings, target 위치 계산
+    const siblings = fullGroup.filter(p => p.id !== sourceId)
+    const newTargetIdx = siblings.findIndex(p => p.id === targetId)
+    let insertAt = zone === 'before' ? Math.max(0, newTargetIdx) : newTargetIdx + 1
+
+    // 인접 no-op 방지: 바로 옆 페이지에 before/after 드롭 시 swap 처리
+    if (sourceCurrentIdx >= 0) {
+      if (zone === 'before' && targetCurrentIdx === sourceCurrentIdx + 1) insertAt = newTargetIdx + 1
+      else if (zone === 'after' && targetCurrentIdx === sourceCurrentIdx - 1) insertAt = Math.max(0, newTargetIdx)
+    }
+
     const newOrder = siblings.map(p => p.id)
     newOrder.splice(insertAt, 0, sourceId)
 
