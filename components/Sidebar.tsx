@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import {
-  FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight,
-  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search,
+  FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronLeft,
+  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical,
 } from 'lucide-react'
 import SearchBar from '@/components/SearchBar'
 
@@ -54,33 +54,51 @@ function daysLeft(deletedAt: string) {
 function OrderModal({
   pages,
   orderMap,
-  onMoveUp,
-  onMoveDown,
+  onReorder,
+  onChangeParent,
   onClose,
 }: {
   pages: Page[]
   orderMap: Record<string, string[]>
-  onMoveUp: (id: string, parentId: string | null) => void
-  onMoveDown: (id: string, parentId: string | null) => void
+  onReorder: (parentId: string | null, newIds: string[]) => void
+  onChangeParent: (id: string, newParentId: string | null, insertAfterId?: string) => void
   onClose: () => void
 }) {
-  // Build a flat ordered list preserving hierarchy (DFS)
-  const buildList = (parentId: string | null, depth: number): { page: Page; depth: number }[] => {
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dropInfo, setDropInfo] = useState<{ targetId: string; before: boolean } | null>(null)
+
+  const getSortedSiblings = (parentId: string | null): Page[] => {
     const key = parentId ?? 'root'
     const order = orderMap[key] ?? []
-    const group = pages
+    return pages
       .filter(p => p.parent_id === parentId)
       .sort((a, b) => {
         const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
         if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        if (ai === -1) return 1
-        if (bi === -1) return -1
+        if (ai === -1) return 1; if (bi === -1) return -1
         return ai - bi
       })
-    return group.flatMap(p => [{ page: p, depth }, ...buildList(p.id, depth + 1)])
   }
 
+  const buildList = (parentId: string | null, depth: number): { page: Page; depth: number }[] =>
+    getSortedSiblings(parentId).flatMap(p => [{ page: p, depth }, ...buildList(p.id, depth + 1)])
+
   const flat = buildList(null, 0)
+  const draggedPage = draggedId ? pages.find(p => p.id === draggedId) : null
+
+  const handleDrop = (targetId: string, before: boolean) => {
+    if (!draggedId || !draggedPage) return
+    const target = pages.find(p => p.id === targetId)
+    if (!target || draggedPage.parent_id !== target.parent_id) return
+    const filtered = getSortedSiblings(draggedPage.parent_id).filter(p => p.id !== draggedId)
+    const targetIdx = filtered.findIndex(p => p.id === targetId)
+    if (targetIdx < 0) return
+    const newIds = filtered.map(p => p.id)
+    newIds.splice(before ? targetIdx : targetIdx + 1, 0, draggedId)
+    onReorder(draggedPage.parent_id, newIds)
+    setDraggedId(null)
+    setDropInfo(null)
+  }
 
   return createPortal(
     <div
@@ -93,59 +111,81 @@ function OrderModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <span className="text-sm font-semibold text-slate-800">페이지 순서 편집</span>
+          <div>
+            <span className="text-sm font-semibold text-slate-800">페이지 순서 편집</span>
+            <p className="text-[11px] text-slate-400 mt-0.5">드래그로 순서 변경 · ◀▶ 로 계층 변경</p>
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={16} />
           </button>
         </div>
 
         {/* Page list */}
-        <ul className="overflow-y-auto max-h-[60vh] py-2">
+        <ul className="overflow-y-auto max-h-[60vh] py-2" onDragOver={(e) => e.preventDefault()}>
           {flat.map(({ page, depth }) => {
-            const siblings = pages.filter(p => p.parent_id === page.parent_id)
-            const key = page.parent_id ?? 'root'
-            const order = orderMap[key] ?? []
-            const sorted = siblings.sort((a, b) => {
-              const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
-              if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-              if (ai === -1) return 1; if (bi === -1) return -1
-              return ai - bi
-            })
-            const idx = sorted.findIndex(p => p.id === page.id)
-            const isFirst = idx === 0
-            const isLast = idx === sorted.length - 1
+            const siblings = getSortedSiblings(page.parent_id)
+            const idx = siblings.findIndex(p => p.id === page.id)
+            const isDragging = draggedId === page.id
+            const isSameLevelTarget =
+              dropInfo?.targetId === page.id &&
+              draggedPage?.parent_id === page.parent_id &&
+              draggedId !== page.id
 
             return (
-              <li
-                key={page.id}
-                className="flex items-center gap-2 px-4 py-1.5 hover:bg-slate-50 transition-colors"
-                style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
-              >
-                {depth > 0 && (
-                  <span className="shrink-0 w-3 h-px bg-slate-200 inline-block" />
+              <li key={page.id} className="relative">
+                {isSameLevelTarget && dropInfo?.before && (
+                  <div className="absolute top-0 inset-x-3 h-0.5 bg-blue-400 rounded-full z-10 pointer-events-none" />
                 )}
-                <FileText size={12} className="shrink-0 text-slate-300" />
-                <span className="flex-1 text-[13px] text-slate-700 truncate">
-                  {page.title || '제목 없음'}
-                </span>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    onClick={() => onMoveUp(page.id, page.parent_id)}
-                    disabled={isFirst}
-                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                    title="위로"
-                  >
-                    <ChevronUp size={13} />
-                  </button>
-                  <button
-                    onClick={() => onMoveDown(page.id, page.parent_id)}
-                    disabled={isLast}
-                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-                    title="아래로"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
+                <div
+                  draggable
+                  onDragStart={(e) => { setDraggedId(page.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => { setDraggedId(null); setDropInfo(null) }}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    if (draggedId === page.id || draggedPage?.parent_id !== page.parent_id) return
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setDropInfo({ targetId: page.id, before: e.clientY < rect.top + rect.height / 2 })
+                  }}
+                  onDrop={(e) => { e.preventDefault(); if (dropInfo) handleDrop(dropInfo.targetId, dropInfo.before) }}
+                  className={`flex items-center gap-1.5 py-1.5 pr-2 transition-colors select-none ${
+                    isDragging ? 'opacity-30' : 'hover:bg-slate-50'
+                  }`}
+                  style={{ paddingLeft: `${0.75 + depth * 1.25}rem` }}
+                >
+                  <GripVertical size={12} className="shrink-0 text-slate-300 cursor-grab active:cursor-grabbing" />
+                  {depth > 0 && <span className="shrink-0 w-2.5 h-px bg-slate-200 inline-block" />}
+                  <FileText size={12} className="shrink-0 text-slate-300" />
+                  <span className="flex-1 text-[13px] text-slate-700 truncate min-w-0">
+                    {page.title || '제목 없음'}
+                  </span>
+                  <div className="flex items-center gap-0 shrink-0">
+                    <button
+                      onClick={() => {
+                        const parent = pages.find(p => p.id === page.parent_id)
+                        onChangeParent(page.id, parent?.parent_id ?? null, parent?.id)
+                      }}
+                      disabled={page.parent_id === null}
+                      title="상위 레벨로 내보내기"
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (idx === 0) return
+                        onChangeParent(page.id, siblings[idx - 1].id)
+                      }}
+                      disabled={idx === 0}
+                      title="이전 페이지 하위로 들여쓰기"
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
                 </div>
+                {isSameLevelTarget && !dropInfo?.before && (
+                  <div className="absolute bottom-0 inset-x-3 h-0.5 bg-blue-400 rounded-full z-10 pointer-events-none" />
+                )}
               </li>
             )
           })}
@@ -445,6 +485,31 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     saveOrderMap({ ...orderMapRef.current, [key]: ids })
   }, [saveOrderMap, getSortedGroup])
 
+  const handleReorder = useCallback((parentId: string | null, newIds: string[]) => {
+    const key = parentId ?? 'root'
+    saveOrderMap({ ...orderMapRef.current, [key]: newIds })
+  }, [saveOrderMap])
+
+  const handleChangeParent = useCallback(async (id: string, newParentId: string | null, insertAfterId?: string) => {
+    await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', id)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, parent_id: newParentId } : p))
+    const page = pagesRef.current.find(p => p.id === id)
+    if (!page) return
+    const oldKey = page.parent_id ?? 'root'
+    const newKey = newParentId ?? 'root'
+    const newMap = { ...orderMapRef.current }
+    newMap[oldKey] = (newMap[oldKey] ?? []).filter(i => i !== id)
+    const newParentOrder = [...(newMap[newKey] ?? [])]
+    if (insertAfterId) {
+      const insertIdx = newParentOrder.indexOf(insertAfterId)
+      insertIdx >= 0 ? newParentOrder.splice(insertIdx + 1, 0, id) : newParentOrder.push(id)
+    } else {
+      if (!newParentOrder.includes(id)) newParentOrder.push(id)
+    }
+    newMap[newKey] = newParentOrder
+    saveOrderMap(newMap)
+  }, [saveOrderMap])
+
   // ── Page CRUD ─────────────────────────────────────────────────────────────
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
@@ -660,8 +725,8 @@ export default function Sidebar({ userName, isOpen, onClose }: {
         <OrderModal
           pages={sortedPages}
           orderMap={orderMap}
-          onMoveUp={handleMoveUp}
-          onMoveDown={handleMoveDown}
+          onReorder={handleReorder}
+          onChangeParent={handleChangeParent}
           onClose={() => setOrderModalOpen(false)}
         />
       )}
