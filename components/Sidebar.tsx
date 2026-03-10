@@ -77,7 +77,8 @@ function PageItem({
   collapsedIds: Set<string>
   onToggleCollapsed: (id: string) => void
 }) {
-  const expanded = !collapsedIds.has(page.id)
+  // 드래그 중에는 모든 페이지 접기 → 하위 페이지가 drop zone 가로채기 방지
+  const expanded = !collapsedIds.has(page.id) && dragId === null
   const children = allPages.filter(p => p.parent_id === page.id)
   const isActive = pathname === `/dashboard/page/${page.id}`
   const isDragging = dragId === page.id
@@ -407,7 +408,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       newMap[targetId] = [...(newMap[targetId] ?? []), sourceId]
       setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
       saveOrderMap(newMap)
-      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
+      const { error } = await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
+      if (error) console.error('parent_id 업데이트 실패:', error)
     } else {
       // 같은 레벨 순서 변경
       if (sourcePage.parent_id !== targetPage.parent_id) return
