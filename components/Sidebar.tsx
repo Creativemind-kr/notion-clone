@@ -39,7 +39,7 @@ interface Page {
   deleted_at?: string | null
 }
 
-type DropZone = 'before' | 'after'
+type DropZone = 'before' | 'into' | 'after'
 interface DragOverState { id: string; zone: DropZone }
 
 function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolean {
@@ -54,7 +54,9 @@ function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolea
 function getZone(e: React.DragEvent): DropZone {
   const rect = e.currentTarget.getBoundingClientRect()
   const y = e.clientY - rect.top
-  return y < rect.height * 0.5 ? 'before' : 'after'
+  if (y < rect.height * 0.28) return 'before'
+  if (y > rect.height * 0.72) return 'after'
+  return 'into'
 }
 
 function PageItem({
@@ -89,6 +91,8 @@ function PageItem({
 
   const rowCls = isDragging
     ? 'opacity-30'
+    : activeZone === 'into'
+    ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset'
     : isActive
     ? 'bg-slate-900 text-white'
     : depth === 0
@@ -394,19 +398,27 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const targetPage = pages.find(p => p.id === targetId)
     if (!sourcePage || !targetPage) return
 
-    // 같은 레벨로만 이동 (종속 페이지에 실수로 drop 방지)
-    if (sourcePage.parent_id !== targetPage.parent_id) return
-
-    const parentId = sourcePage.parent_id
-    const key = parentId ?? 'root'
-
-    const siblings = getSortedGroup(parentId, sourceId)
-    const targetIdx = siblings.findIndex(p => p.id === targetId)
-    const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
-    const newOrder = siblings.map(p => p.id)
-    newOrder.splice(insertAt, 0, sourceId)
-
-    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
+    if (zone === 'into') {
+      // 하위로 이동: source를 target의 자식으로
+      if (isDescendant(sourceId, targetId, pagesRef.current)) return
+      const oldKey = sourcePage.parent_id ?? 'root'
+      const newMap = { ...orderMapRef.current }
+      newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
+      newMap[targetId] = [...(newMap[targetId] ?? []), sourceId]
+      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
+      saveOrderMap(newMap)
+      await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
+    } else {
+      // 같은 레벨 순서 변경
+      if (sourcePage.parent_id !== targetPage.parent_id) return
+      const key = sourcePage.parent_id ?? 'root'
+      const siblings = getSortedGroup(sourcePage.parent_id, sourceId)
+      const targetIdx = siblings.findIndex(p => p.id === targetId)
+      const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
+      const newOrder = siblings.map(p => p.id)
+      newOrder.splice(insertAt, 0, sourceId)
+      saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
+    }
   }, [saveOrderMap, getSortedGroup])
 
   const handleDragEnd = useCallback(() => {
