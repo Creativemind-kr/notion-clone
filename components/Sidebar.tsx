@@ -130,15 +130,16 @@ function PageItem({
         className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 relative overflow-visible ${rowCls}`}
         style={{ paddingLeft: `${0.4 + depth * 1.1}rem` }}
       >
-        {/* Single drop indicator */}
-        {activeZone !== null && (
+        {/* Drop line: before/after만 (into는 ring highlight로 표시) */}
+        {(activeZone === 'before' || activeZone === 'after') && (
           <div className={`absolute left-2 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none ${activeZone === 'before' ? '-top-[1px]' : '-bottom-[1px]'}`} />
         )}
 
         {/* Drag handle */}
         <span
+          style={{ touchAction: 'none' }}
           className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
-          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           <GripVertical size={11} />
         </span>
