@@ -97,14 +97,6 @@ function PageItem({
 
   return (
     <div className="relative">
-      {/* Drop BEFORE indicator */}
-      {activeZone === 'before' && (
-        <div
-          className="absolute left-3 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none"
-          style={{ top: 1 }}
-        />
-      )}
-
       <div
         draggable
         onDragStart={(e) => {
@@ -130,9 +122,14 @@ function PageItem({
         onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(e, page.id, getZone(e)) }}
         onDragEnd={onDragEnd}
         onClick={() => onNavigate(page.id)}
-        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 relative ${rowCls}`}
+        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 relative overflow-visible ${rowCls}`}
         style={{ paddingLeft: `${0.4 + depth * 1.1}rem` }}
       >
+        {/* Single drop indicator */}
+        {activeZone !== null && (
+          <div className={`absolute left-2 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none ${activeZone === 'before' ? '-top-[1px]' : '-bottom-[1px]'}`} />
+        )}
+
         {/* Drag handle */}
         <span
           className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
@@ -196,14 +193,6 @@ function PageItem({
           </button>
         </div>
       </div>
-
-      {/* Drop AFTER indicator */}
-      {activeZone === 'after' && (
-        <div
-          className="absolute left-3 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none"
-          style={{ bottom: 1 }}
-        />
-      )}
 
       {/* Children + tree line */}
       {expanded && children.length > 0 && (
