@@ -237,9 +237,23 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   const orderMapRef = useRef<Record<string, string[]>>({})
   const pagesRef = useRef<Page[]>([])
-  const sortedPagesRef = useRef<Page[]>([])
   pagesRef.current = pages
   orderMapRef.current = orderMap
+
+  // 특정 parent 그룹의 정렬된 페이지 목록 반환 (refs 사용 → 항상 최신)
+  const getSortedGroup = useCallback((parentId: string | null, excludeId?: string): Page[] => {
+    const key = parentId ?? 'root'
+    const order = orderMapRef.current[key] ?? []
+    return pagesRef.current
+      .filter(p => p.parent_id === parentId && p.id !== excludeId)
+      .sort((a, b) => {
+        const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
+        if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+  }, [])
 
   const router = useRouter()
   const pathname = usePathname()
@@ -380,37 +394,29 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const targetPage = pages.find(p => p.id === targetId)
     if (!sourcePage || !targetPage) return
 
-    // before / after: reorder at same level only
     const newParentId = targetPage.parent_id
     const oldParentId = sourcePage.parent_id
     const newKey = newParentId ?? 'root'
     const oldKey = oldParentId ?? 'root'
 
-    if (newParentId !== null && isDescendant(sourceId, newParentId, pages)) return
-
-    if (oldParentId !== newParentId) {
-      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
-    }
-
-    const levelIds = sortedPagesRef.current
-      .filter(p => p.parent_id === newParentId && p.id !== sourceId)
-      .map(p => p.id)
-
-    const targetIdx = levelIds.indexOf(targetId)
+    // 같은 레벨 재정렬: source를 제외한 siblings를 현재 순서대로 가져와 삽입 위치 계산
+    const siblings = getSortedGroup(newParentId, sourceId)
+    const targetIdx = siblings.findIndex(p => p.id === targetId)
     const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
-    levelIds.splice(insertAt, 0, sourceId)
+    const newOrder = siblings.map(p => p.id)
+    newOrder.splice(insertAt, 0, sourceId)
 
-    const newMap = { ...orderMapRef.current }
-    newMap[newKey] = levelIds
+    const newMap = { ...orderMapRef.current, [newKey]: newOrder }
     if (oldKey !== newKey) {
       newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
+      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
     }
     saveOrderMap(newMap)
 
     if (oldParentId !== newParentId) {
       await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
     }
-  }, [saveOrderMap])
+  }, [saveOrderMap, getSortedGroup])
 
   const handleDragEnd = useCallback(() => {
     setDragId(null)
@@ -437,27 +443,21 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   const handleMoveUp = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    const levelIds = sortedPagesRef.current
-      .filter(p => p.parent_id === parentId)
-      .map(p => p.id)
-    const idx = levelIds.indexOf(id)
+    const ids = getSortedGroup(parentId).map(p => p.id)
+    const idx = ids.indexOf(id)
     if (idx <= 0) return
-    const newOrder = [...levelIds]
-    ;[newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]
-    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
-  }, [saveOrderMap])
+    ;[ids[idx - 1], ids[idx]] = [ids[idx], ids[idx - 1]]
+    saveOrderMap({ ...orderMapRef.current, [key]: ids })
+  }, [saveOrderMap, getSortedGroup])
 
   const handleMoveDown = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
-    const levelIds = sortedPagesRef.current
-      .filter(p => p.parent_id === parentId)
-      .map(p => p.id)
-    const idx = levelIds.indexOf(id)
-    if (idx < 0 || idx >= levelIds.length - 1) return
-    const newOrder = [...levelIds]
-    ;[newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]]
-    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
-  }, [saveOrderMap])
+    const ids = getSortedGroup(parentId).map(p => p.id)
+    const idx = ids.indexOf(id)
+    if (idx < 0 || idx >= ids.length - 1) return
+    ;[ids[idx], ids[idx + 1]] = [ids[idx + 1], ids[idx]]
+    saveOrderMap({ ...orderMapRef.current, [key]: ids })
+  }, [saveOrderMap, getSortedGroup])
 
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
@@ -504,21 +504,16 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setTrashedPages([])
   }
 
-  // Sort pages by orderMap within each parent group
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
     const key = a.parent_id ?? 'root'
     const order = orderMap[key] ?? []
-    const ai = order.indexOf(a.id)
-    const bi = order.indexOf(b.id)
+    const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
     if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     if (ai === -1) return 1
     if (bi === -1) return -1
     return ai - bi
   })
-  // 항상 최신 정렬 상태를 ref에 반영 (handleMoveUp/Down에서 사용)
-  sortedPagesRef.current = sortedPages
-
   const topLevelPages = sortedPages.filter(p => p.parent_id === null)
 
   return (
@@ -578,14 +573,14 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
               const pages = pagesRef.current
               const sourcePage = pages.find(p => p.id === sourceId)
               if (!sourcePage || sourcePage.parent_id === null) return
-              setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: null } : p))
-              await supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
+              const oldKey = sourcePage.parent_id
               const newMap = { ...orderMapRef.current }
-              const oldKey = sourcePage.parent_id ?? 'root'
               newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
               newMap['root'] = [...(newMap['root'] ?? []), sourceId]
+              setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: null } : p))
               saveOrderMap(newMap)
               setDragId(null); setDragOver(null)
+              await supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
             }}
           >
             {topLevelPages.map(page => (
