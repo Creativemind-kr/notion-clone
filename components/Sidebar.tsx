@@ -43,6 +43,7 @@ interface Page {
   parent_id: string | null
   created_at: string
   deleted_at?: string | null
+  sort_order: number | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,16 +51,23 @@ function daysLeft(deletedAt: string) {
   return Math.max(7 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000), 0)
 }
 
+function sortSiblings(pages: Page[]): Page[] {
+  return [...pages].sort((a, b) => {
+    const ao = a.sort_order ?? Infinity
+    const bo = b.sort_order ?? Infinity
+    if (ao !== bo) return ao - bo
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  })
+}
+
 // ─── Order Edit Modal ─────────────────────────────────────────────────────────
 function OrderModal({
   pages,
-  orderMap,
   onReorder,
   onChangeParent,
   onClose,
 }: {
   pages: Page[]
-  orderMap: Record<string, string[]>
   onReorder: (parentId: string | null, newIds: string[]) => void
   onChangeParent: (id: string, newParentId: string | null, insertAfterId?: string) => void
   onClose: () => void
@@ -67,18 +75,8 @@ function OrderModal({
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropInfo, setDropInfo] = useState<{ targetId: string; before: boolean } | null>(null)
 
-  const getSortedSiblings = (parentId: string | null): Page[] => {
-    const key = parentId ?? 'root'
-    const order = orderMap[key] ?? []
-    return pages
-      .filter(p => p.parent_id === parentId)
-      .sort((a, b) => {
-        const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
-        if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        if (ai === -1) return 1; if (bi === -1) return -1
-        return ai - bi
-      })
-  }
+  const getSortedSiblings = (parentId: string | null): Page[] =>
+    sortSiblings(pages.filter(p => p.parent_id === parentId))
 
   const buildList = (parentId: string | null, depth: number): { page: Page; depth: number }[] =>
     getSortedSiblings(parentId).flatMap(p => [{ page: p, depth }, ...buildList(p.id, depth + 1)])
@@ -224,7 +222,7 @@ function PageItem({
   onToggleCollapsed: (id: string) => void
 }) {
   const expanded = !collapsedIds.has(page.id)
-  const children = allPages.filter(p => p.parent_id === page.id)
+  const children = sortSiblings(allPages.filter(p => p.parent_id === page.id))
   const isActive = pathname === `/dashboard/page/${page.id}`
 
   const fontSize = depth === 0
@@ -335,44 +333,16 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   const [loading, setLoading] = useState(true)
   const [trashOpen, setTrashOpen] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
-  const [orderMap, setOrderMap] = useState<Record<string, string[]>>({})
   const [orderModalOpen, setOrderModalOpen] = useState(false)
 
-  const orderMapRef = useRef<Record<string, string[]>>({})
   const pagesRef = useRef<Page[]>([])
   pagesRef.current = pages
-  orderMapRef.current = orderMap
-
-  const getSortedGroup = useCallback((parentId: string | null, excludeId?: string): Page[] => {
-    const key = parentId ?? 'root'
-    const order = orderMapRef.current[key] ?? []
-    return pagesRef.current
-      .filter(p => p.parent_id === parentId && p.id !== excludeId)
-      .sort((a, b) => {
-        const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
-        if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        if (ai === -1) return 1
-        if (bi === -1) return -1
-        return ai - bi
-      })
-  }, [])
 
   const router = useRouter()
   const pathname = usePathname()
   const supabase = useRef(createClient())
 
-  // ── Persist ───────────────────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`page-order-map-${userName}`)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        setOrderMap(parsed)
-        orderMapRef.current = parsed
-      }
-    } catch {}
-  }, [userName])
-
+  // ── Collapsed 상태 persist ────────────────────────────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(`page-collapsed-${userName}`)
@@ -390,50 +360,35 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     })
   }, [userName])
 
-  const saveOrderMap = useCallback((map: Record<string, string[]>) => {
-    const deduped: Record<string, string[]> = {}
-    for (const [key, ids] of Object.entries(map)) {
-      deduped[key] = [...new Set(ids)]
-    }
-    setOrderMap(deduped)
-    orderMapRef.current = deduped
-    localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(deduped))
-  }, [userName])
+  // ── 형제 그룹 정렬 조회 ───────────────────────────────────────────────────
+  const getSortedGroup = useCallback((parentId: string | null, excludeId?: string): Page[] =>
+    sortSiblings(pagesRef.current.filter(p => p.parent_id === parentId && p.id !== excludeId))
+  , [])
 
+  // ── sort_order 일괄 DB 업데이트 ───────────────────────────────────────────
+  const updateSortOrders = useCallback(async (ids: string[]) => {
+    await Promise.all(
+      ids.map((id, idx) => supabase.current.from('pages').update({ sort_order: idx }).eq('id', id))
+    )
+    setPages(prev => prev.map(p => {
+      const idx = ids.indexOf(p.id)
+      return idx >= 0 ? { ...p, sort_order: idx } : p
+    }))
+  }, [])
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchPages = useCallback(async () => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
     await supabase.current.from('pages').delete()
       .eq('author_name', userName).not('deleted_at', 'is', null).lt('deleted_at', sevenDaysAgo)
     const { data } = await supabase.current.from('pages')
-      .select('id, title, parent_id, created_at, deleted_at')
-      .eq('author_name', userName).order('created_at', { ascending: true })
+      .select('id, title, parent_id, created_at, deleted_at, sort_order')
+      .eq('author_name', userName)
+      .order('sort_order', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
     const all = data || []
-    const active = all.filter(p => !p.deleted_at)
-    setPages(active)
+    setPages(all.filter(p => !p.deleted_at))
     setTrashedPages(all.filter(p => p.deleted_at))
-
-    const currentMap = orderMapRef.current
-    const newMap = { ...currentMap }
-    let changed = false
-    const activeIds = new Set(active.map(p => p.id))
-
-    active.forEach(p => {
-      const key = p.parent_id ?? 'root'
-      if (!newMap[key]) newMap[key] = []
-      if (!newMap[key].includes(p.id)) {
-        newMap[key] = [...newMap[key], p.id]
-        changed = true
-      }
-    })
-    Object.keys(newMap).forEach(key => {
-      const cleaned = newMap[key].filter(id => activeIds.has(id))
-      if (cleaned.length !== newMap[key].length) { newMap[key] = cleaned; changed = true }
-    })
-    if (changed) {
-      setOrderMap(newMap)
-      orderMapRef.current = newMap
-      localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
-    }
     setLoading(false)
   }, [userName])
 
@@ -467,55 +422,58 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   }, [fetchPages, userName])
 
   // ── Reorder ───────────────────────────────────────────────────────────────
-  const handleMoveUp = useCallback((id: string, parentId: string | null) => {
-    const key = parentId ?? 'root'
+  const handleMoveUp = useCallback(async (id: string, parentId: string | null) => {
     const ids = getSortedGroup(parentId).map(p => p.id)
     const idx = ids.indexOf(id)
     if (idx <= 0) return
     ;[ids[idx - 1], ids[idx]] = [ids[idx], ids[idx - 1]]
-    saveOrderMap({ ...orderMapRef.current, [key]: ids })
-  }, [saveOrderMap, getSortedGroup])
+    await updateSortOrders(ids)
+  }, [getSortedGroup, updateSortOrders])
 
-  const handleMoveDown = useCallback((id: string, parentId: string | null) => {
-    const key = parentId ?? 'root'
+  const handleMoveDown = useCallback(async (id: string, parentId: string | null) => {
     const ids = getSortedGroup(parentId).map(p => p.id)
     const idx = ids.indexOf(id)
     if (idx < 0 || idx >= ids.length - 1) return
     ;[ids[idx], ids[idx + 1]] = [ids[idx + 1], ids[idx]]
-    saveOrderMap({ ...orderMapRef.current, [key]: ids })
-  }, [saveOrderMap, getSortedGroup])
+    await updateSortOrders(ids)
+  }, [getSortedGroup, updateSortOrders])
 
-  const handleReorder = useCallback((parentId: string | null, newIds: string[]) => {
-    const key = parentId ?? 'root'
-    saveOrderMap({ ...orderMapRef.current, [key]: newIds })
-  }, [saveOrderMap])
+  const handleReorder = useCallback(async (_parentId: string | null, newIds: string[]) => {
+    await updateSortOrders(newIds)
+  }, [updateSortOrders])
 
   const handleChangeParent = useCallback(async (id: string, newParentId: string | null, insertAfterId?: string) => {
-    await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', id)
-    setPages(prev => prev.map(p => p.id === id ? { ...p, parent_id: newParentId } : p))
     const page = pagesRef.current.find(p => p.id === id)
     if (!page) return
-    const oldKey = page.parent_id ?? 'root'
-    const newKey = newParentId ?? 'root'
-    const newMap = { ...orderMapRef.current }
-    newMap[oldKey] = (newMap[oldKey] ?? []).filter(i => i !== id)
-    const newParentOrder = [...(newMap[newKey] ?? [])]
+
+    await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', id)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, parent_id: newParentId } : p))
+    // pagesRef 즉시 반영 (이후 getSortedGroup 호출에 사용)
+    pagesRef.current = pagesRef.current.map(p => p.id === id ? { ...p, parent_id: newParentId } : p)
+
+    // 기존 부모 형제 재정렬
+    const oldSiblings = getSortedGroup(page.parent_id, id)
+    if (oldSiblings.length > 0) await updateSortOrders(oldSiblings.map(p => p.id))
+
+    // 새 부모 형제 재정렬
+    const newSiblings = getSortedGroup(newParentId, id)
+    const newIds = newSiblings.map(p => p.id)
     if (insertAfterId) {
-      const insertIdx = newParentOrder.indexOf(insertAfterId)
-      insertIdx >= 0 ? newParentOrder.splice(insertIdx + 1, 0, id) : newParentOrder.push(id)
+      const insertIdx = newIds.indexOf(insertAfterId)
+      newIds.splice(insertIdx >= 0 ? insertIdx + 1 : newIds.length, 0, id)
     } else {
-      if (!newParentOrder.includes(id)) newParentOrder.push(id)
+      newIds.push(id)
     }
-    newMap[newKey] = newParentOrder
-    saveOrderMap(newMap)
-  }, [saveOrderMap])
+    await updateSortOrders(newIds)
+  }, [getSortedGroup, updateSortOrders])
 
   // ── Page CRUD ─────────────────────────────────────────────────────────────
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
   const createPage = async (parentId: string | null = null) => {
+    const sort_order = getSortedGroup(parentId).length
     const { data, error } = await supabase.current.from('pages')
-      .insert({ title: '제목 없음', content: '', author_name: userName, parent_id: parentId })
+      .insert({ title: '제목 없음', content: '', author_name: userName, parent_id: parentId, sort_order })
       .select().single()
     if (error) { alert('오류: ' + error.message); return }
     if (data) {
@@ -559,13 +517,10 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   // ── Sorted lists ──────────────────────────────────────────────────────────
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
-    const key = a.parent_id ?? 'root'
-    const order = orderMap[key] ?? []
-    const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
-    if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    if (ai === -1) return 1
-    if (bi === -1) return -1
-    return ai - bi
+    const ao = a.sort_order ?? Infinity
+    const bo = b.sort_order ?? Infinity
+    if (ao !== bo) return ao - bo
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   })
   const topLevelPages = sortedPages.filter(p => p.parent_id === null)
 
@@ -612,7 +567,6 @@ export default function Sidebar({ userName, isOpen, onClose }: {
         <div className="px-4 mb-1 mt-1 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">페이지</span>
           <div className="flex items-center gap-0.5">
-            {/* 순서 편집 버튼 */}
             <button
               onClick={() => setOrderModalOpen(true)}
               className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md p-1 transition-colors"
@@ -620,7 +574,6 @@ export default function Sidebar({ userName, isOpen, onClose }: {
             >
               <ArrowUpDown size={13} />
             </button>
-            {/* 새 페이지 버튼 */}
             <button
               onClick={() => createPage(null)}
               className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md p-1 transition-colors"
@@ -720,11 +673,9 @@ export default function Sidebar({ userName, isOpen, onClose }: {
         </div>
       </div>
 
-      {/* Order edit modal */}
       {orderModalOpen && (
         <OrderModal
           pages={sortedPages}
-          orderMap={orderMap}
           onReorder={handleReorder}
           onChangeParent={handleChangeParent}
           onClose={() => setOrderModalOpen(false)}
