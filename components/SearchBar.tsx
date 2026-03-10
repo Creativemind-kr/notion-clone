@@ -99,23 +99,23 @@ export default function SearchBar({ userName }: { userName: string }) {
     setAllPages(data || [])
   }, [userName, allPages.length])
 
-  // Ctrl+K 단축키
+  // Ctrl+K 단축키 + 사이드바 검색바 클릭 이벤트
   useEffect(() => {
+    const open = () => {
+      setIsOpen(true)
+      loadAllPages()
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setIsOpen(true)
-        loadAllPages()
-        setTimeout(() => inputRef.current?.focus(), 50)
-      }
-      if (e.key === 'Escape') {
-        setIsOpen(false)
-        setQuery('')
-        setResults([])
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); open() }
+      if (e.key === 'Escape') { setIsOpen(false); setQuery(''); setResults([]) }
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('open-search', open)
+    return () => {
+      window.removeEventListener('keydown', handler)
+      window.removeEventListener('open-search', open)
+    }
   }, [loadAllPages])
 
   const doSearch = useCallback(async (q: string) => {

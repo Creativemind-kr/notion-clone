@@ -4,8 +4,13 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
-import { FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronUp, FilePlus, RotateCcw, X, Calendar, GripVertical } from 'lucide-react'
+import {
+  FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight,
+  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search,
+} from 'lucide-react'
+import SearchBar from '@/components/SearchBar'
 
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   return (
@@ -31,6 +36,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
   )
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Page {
   id: string
   title: string
@@ -39,50 +45,147 @@ interface Page {
   deleted_at?: string | null
 }
 
-type DropZone = 'before' | 'into' | 'after'
-interface DragOverState { id: string; zone: DropZone }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function daysLeft(deletedAt: string) {
+  return Math.max(7 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000), 0)
+}
 
-function isDescendant(ancestorId: string, nodeId: string, pages: Page[]): boolean {
-  let current = pages.find(p => p.id === nodeId)
-  while (current?.parent_id) {
-    if (current.parent_id === ancestorId) return true
-    current = pages.find(p => p.id === current!.parent_id)
+// ─── Order Edit Modal ─────────────────────────────────────────────────────────
+function OrderModal({
+  pages,
+  orderMap,
+  onMoveUp,
+  onMoveDown,
+  onClose,
+}: {
+  pages: Page[]
+  orderMap: Record<string, string[]>
+  onMoveUp: (id: string, parentId: string | null) => void
+  onMoveDown: (id: string, parentId: string | null) => void
+  onClose: () => void
+}) {
+  // Build a flat ordered list preserving hierarchy (DFS)
+  const buildList = (parentId: string | null, depth: number): { page: Page; depth: number }[] => {
+    const key = parentId ?? 'root'
+    const order = orderMap[key] ?? []
+    const group = pages
+      .filter(p => p.parent_id === parentId)
+      .sort((a, b) => {
+        const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
+        if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+    return group.flatMap(p => [{ page: p, depth }, ...buildList(p.id, depth + 1)])
   }
-  return false
+
+  const flat = buildList(null, 0)
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <span className="text-sm font-semibold text-slate-800">페이지 순서 편집</span>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Page list */}
+        <ul className="overflow-y-auto max-h-[60vh] py-2">
+          {flat.map(({ page, depth }) => {
+            const siblings = pages.filter(p => p.parent_id === page.parent_id)
+            const key = page.parent_id ?? 'root'
+            const order = orderMap[key] ?? []
+            const sorted = siblings.sort((a, b) => {
+              const ai = order.indexOf(a.id), bi = order.indexOf(b.id)
+              if (ai === -1 && bi === -1) return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+              if (ai === -1) return 1; if (bi === -1) return -1
+              return ai - bi
+            })
+            const idx = sorted.findIndex(p => p.id === page.id)
+            const isFirst = idx === 0
+            const isLast = idx === sorted.length - 1
+
+            return (
+              <li
+                key={page.id}
+                className="flex items-center gap-2 px-4 py-1.5 hover:bg-slate-50 transition-colors"
+                style={{ paddingLeft: `${1 + depth * 1.25}rem` }}
+              >
+                {depth > 0 && (
+                  <span className="shrink-0 w-3 h-px bg-slate-200 inline-block" />
+                )}
+                <FileText size={12} className="shrink-0 text-slate-300" />
+                <span className="flex-1 text-[13px] text-slate-700 truncate">
+                  {page.title || '제목 없음'}
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => onMoveUp(page.id, page.parent_id)}
+                    disabled={isFirst}
+                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    title="위로"
+                  >
+                    <ChevronUp size={13} />
+                  </button>
+                  <button
+                    onClick={() => onMoveDown(page.id, page.parent_id)}
+                    disabled={isLast}
+                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                    title="아래로"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+          {flat.length === 0 && (
+            <li className="px-5 py-6 text-center text-sm text-slate-400">페이지가 없어요</li>
+          )}
+        </ul>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors"
+          >
+            완료
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
 }
 
-function getZone(e: React.DragEvent): DropZone {
-  const rect = e.currentTarget.getBoundingClientRect()
-  const y = e.clientY - rect.top
-  if (y < rect.height * 0.28) return 'before'
-  if (y > rect.height * 0.72) return 'after'
-  return 'into'
-}
-
+// ─── PageItem ─────────────────────────────────────────────────────────────────
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
-  dragId, dragOver, onDragStart, onDragOver, onDrop, onDragEnd,
   onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
-  onNavigate: (id: string) => void; onCreateChild: (parentId: string) => void
+  onNavigate: (id: string) => void
+  onCreateChild: (parentId: string) => void
   onDelete: (e: React.MouseEvent, id: string) => void
-  dragId: string | null; dragOver: DragOverState | null
-  onDragStart: (e: React.DragEvent, id: string) => void
-  onDragOver: (id: string, zone: DropZone) => void
-  onDrop: (e: React.DragEvent, id: string, zone: DropZone) => void
-  onDragEnd: () => void
   onMoveUp: (id: string, parentId: string | null) => void
   onMoveDown: (id: string, parentId: string | null) => void
   collapsedIds: Set<string>
   onToggleCollapsed: (id: string) => void
 }) {
-  // 드래그 중에는 모든 페이지 접기 → 하위 페이지가 drop zone 가로채기 방지
-  const expanded = !collapsedIds.has(page.id) && dragId === null
+  const expanded = !collapsedIds.has(page.id)
   const children = allPages.filter(p => p.parent_id === page.id)
   const isActive = pathname === `/dashboard/page/${page.id}`
-  const isDragging = dragId === page.id
-  const activeZone = dragOver?.id === page.id && !isDragging ? dragOver.zone : null
 
   const fontSize = depth === 0
     ? 'text-[13px] font-semibold'
@@ -90,11 +193,7 @@ function PageItem({
     ? 'text-[12px] font-normal'
     : 'text-[11.5px] font-normal'
 
-  const rowCls = isDragging
-    ? 'opacity-30'
-    : activeZone === 'into'
-    ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset'
-    : isActive
+  const rowCls = isActive
     ? 'bg-slate-900 text-white'
     : depth === 0
     ? 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
@@ -103,58 +202,23 @@ function PageItem({
   return (
     <div className="relative">
       <div
-        draggable
-        onDragStart={(e) => {
-          // Custom drag preview badge
-          const ghost = document.createElement('div')
-          ghost.textContent = page.title || '제목 없음'
-          Object.assign(ghost.style, {
-            position: 'fixed', top: '-200px', left: '0',
-            background: '#1e293b', color: '#f8fafc',
-            padding: '5px 12px', borderRadius: '8px',
-            fontSize: '12px', fontWeight: '500',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-            whiteSpace: 'nowrap', maxWidth: '220px',
-            overflow: 'hidden', textOverflow: 'ellipsis',
-            pointerEvents: 'none',
-          })
-          document.body.appendChild(ghost)
-          e.dataTransfer.setDragImage(ghost, 16, 20)
-          requestAnimationFrame(() => document.body.removeChild(ghost))
-          onDragStart(e, page.id)
-        }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(page.id, getZone(e)) }}
-        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(e, page.id, getZone(e)) }}
-        onDragEnd={onDragEnd}
         onClick={() => onNavigate(page.id)}
-        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 relative overflow-visible ${rowCls}`}
+        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 ${rowCls}`}
         style={{ paddingLeft: `${0.4 + depth * 1.1}rem` }}
       >
-        {/* Drop line: before/after만 (into는 ring highlight로 표시) */}
-        {(activeZone === 'before' || activeZone === 'after') && (
-          <div className={`absolute left-2 right-2 h-[2px] bg-blue-400 rounded-full z-20 pointer-events-none ${activeZone === 'before' ? '-top-[1px]' : '-bottom-[1px]'}`} />
-        )}
-
-        {/* Drag handle */}
-        <span
-          style={{ touchAction: 'none' }}
-          className={`shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity ${isActive ? 'text-white/40' : 'text-slate-300'}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical size={11} />
-        </span>
-
-        {/* Expand/collapse */}
+        {/* Expand / collapse */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleCollapsed(page.id) }}
-          className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'}`}
+          className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${
+            isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'
+          }`}
         >
           {children.length > 0
             ? (expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />)
             : <span className="w-3" />}
         </button>
 
-        {/* Icon */}
+        {/* File icon */}
         <FileText
           size={depth === 0 ? 13 : 12}
           className={`shrink-0 ${isActive ? 'text-white/70' : depth === 0 ? 'text-slate-400' : 'text-slate-300'}`}
@@ -167,7 +231,7 @@ function PageItem({
           </span>
         </Tooltip>
 
-        {/* Actions */}
+        {/* Action buttons */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onMoveUp(page.id, page.parent_id) }}
@@ -203,7 +267,6 @@ function PageItem({
       {/* Children + tree line */}
       {expanded && children.length > 0 && (
         <div className="relative">
-          {/* Vertical tree line */}
           <div
             className="absolute top-0 bottom-1 w-px bg-slate-200 pointer-events-none"
             style={{ left: `${1.15 + depth * 1.1}rem` }}
@@ -213,9 +276,6 @@ function PageItem({
               key={child.id} page={child} allPages={allPages} depth={depth + 1}
               pathname={pathname} onNavigate={onNavigate}
               onCreateChild={onCreateChild} onDelete={onDelete}
-              dragId={dragId} dragOver={dragOver}
-              onDragStart={onDragStart} onDragOver={onDragOver}
-              onDrop={onDrop} onDragEnd={onDragEnd}
               onMoveUp={onMoveUp} onMoveDown={onMoveDown}
               collapsedIds={collapsedIds} onToggleCollapsed={onToggleCollapsed}
             />
@@ -226,27 +286,23 @@ function PageItem({
   )
 }
 
-function daysLeft(deletedAt: string) {
-  return Math.max(7 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000), 0)
-}
-
-export default function Sidebar({ userName, isOpen, onClose }: { userName: string; isOpen: boolean; onClose: () => void }) {
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+export default function Sidebar({ userName, isOpen, onClose }: {
+  userName: string; isOpen: boolean; onClose: () => void
+}) {
   const [pages, setPages] = useState<Page[]>([])
   const [trashedPages, setTrashedPages] = useState<Page[]>([])
   const [loading, setLoading] = useState(true)
   const [trashOpen, setTrashOpen] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
-  // orderMap: { [parentId | 'root']: string[] }
   const [orderMap, setOrderMap] = useState<Record<string, string[]>>({})
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState<DragOverState | null>(null)
+  const [orderModalOpen, setOrderModalOpen] = useState(false)
 
   const orderMapRef = useRef<Record<string, string[]>>({})
   const pagesRef = useRef<Page[]>([])
   pagesRef.current = pages
   orderMapRef.current = orderMap
 
-  // 특정 parent 그룹의 정렬된 페이지 목록 반환 (refs 사용 → 항상 최신)
   const getSortedGroup = useCallback((parentId: string | null, excludeId?: string): Page[] => {
     const key = parentId ?? 'root'
     const order = orderMapRef.current[key] ?? []
@@ -264,10 +320,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   const router = useRouter()
   const pathname = usePathname()
   const supabase = useRef(createClient())
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Load order map from localStorage
+  // ── Persist ───────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(`page-order-map-${userName}`)
@@ -279,7 +333,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     } catch {}
   }, [userName])
 
-  // Load collapsed state from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(`page-collapsed-${userName}`)
@@ -298,7 +351,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   }, [userName])
 
   const saveOrderMap = useCallback((map: Record<string, string[]>) => {
-    // 각 그룹에서 중복 ID 제거
     const deduped: Record<string, string[]> = {}
     for (const [key, ids] of Object.entries(map)) {
       deduped[key] = [...new Set(ids)]
@@ -310,7 +362,8 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
 
   const fetchPages = useCallback(async () => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-    await supabase.current.from('pages').delete().eq('author_name', userName).not('deleted_at', 'is', null).lt('deleted_at', sevenDaysAgo)
+    await supabase.current.from('pages').delete()
+      .eq('author_name', userName).not('deleted_at', 'is', null).lt('deleted_at', sevenDaysAgo)
     const { data } = await supabase.current.from('pages')
       .select('id, title, parent_id, created_at, deleted_at')
       .eq('author_name', userName).order('created_at', { ascending: true })
@@ -319,7 +372,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setPages(active)
     setTrashedPages(all.filter(p => p.deleted_at))
 
-    // 새 페이지(orderMap에 없는 것)를 자동으로 각 그룹 끝에 추가
     const currentMap = orderMapRef.current
     const newMap = { ...currentMap }
     let changed = false
@@ -333,7 +385,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         changed = true
       }
     })
-    // 삭제된 페이지 ID를 orderMap에서 제거
     Object.keys(newMap).forEach(key => {
       const cleaned = newMap[key].filter(id => activeIds.has(id))
       if (cleaned.length !== newMap[key].length) { newMap[key] = cleaned; changed = true }
@@ -343,7 +394,6 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
       orderMapRef.current = newMap
       localStorage.setItem(`page-order-map-${userName}`, JSON.stringify(newMap))
     }
-
     setLoading(false)
   }, [userName])
 
@@ -370,83 +420,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           setTrashedPages(prev => prev.filter(p => p.id !== updated.id))
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pages' }, () => {
-        fetchPages()
-      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pages' }, () => fetchPages())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'pages' }, () => fetchPages())
       .subscribe()
     return () => { client.removeChannel(channel) }
   }, [fetchPages, userName])
 
-  const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('text/plain', id)
-    e.dataTransfer.effectAllowed = 'move'
-    setDragId(id)
-  }, [])
-
-  const handleDragOver = useCallback((id: string, zone: DropZone) => {
-    setDragOver(prev => (prev?.id === id && prev?.zone === zone ? prev : { id, zone }))
-  }, [])
-
-  const handleDrop = useCallback(async (e: React.DragEvent, targetId: string, zone: DropZone) => {
-    e.preventDefault()
-    const sourceId = e.dataTransfer.getData('text/plain')
-    setDragId(null)
-    setDragOver(null)
-    if (!sourceId || sourceId === targetId) return
-
-    const pages = pagesRef.current
-    const sourcePage = pages.find(p => p.id === sourceId)
-    const targetPage = pages.find(p => p.id === targetId)
-    if (!sourcePage || !targetPage) return
-
-    if (zone === 'into') {
-      // 하위로 이동: source를 target의 자식으로
-      if (isDescendant(sourceId, targetId, pagesRef.current)) return
-      const oldKey = sourcePage.parent_id ?? 'root'
-      const newMap = { ...orderMapRef.current }
-      newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
-      newMap[targetId] = [...(newMap[targetId] ?? []), sourceId]
-      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: targetId } : p))
-      saveOrderMap(newMap)
-      const { error } = await supabase.current.from('pages').update({ parent_id: targetId }).eq('id', sourceId)
-      if (error) console.error('parent_id 업데이트 실패:', error)
-    } else {
-      // 같은 레벨 순서 변경
-      if (sourcePage.parent_id !== targetPage.parent_id) return
-      const key = sourcePage.parent_id ?? 'root'
-      const siblings = getSortedGroup(sourcePage.parent_id, sourceId)
-      const targetIdx = siblings.findIndex(p => p.id === targetId)
-      const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
-      const newOrder = siblings.map(p => p.id)
-      newOrder.splice(insertAt, 0, sourceId)
-      saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
-    }
-  }, [saveOrderMap, getSortedGroup])
-
-  const handleDragEnd = useCallback(() => {
-    setDragId(null)
-    setDragOver(null)
-    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null }
-  }, [])
-
-  // Auto-scroll when dragging near top/bottom edge of the scroll container
-  const handleScrollAreaDragOver = useCallback((e: React.DragEvent) => {
-    const el = scrollRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const threshold = 60
-    const y = e.clientY
-    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null }
-    if (y < rect.top + threshold) {
-      const speed = Math.max(2, Math.round((threshold - (y - rect.top)) / 6))
-      autoScrollTimer.current = setInterval(() => { el.scrollTop -= speed }, 16)
-    } else if (y > rect.bottom - threshold) {
-      const speed = Math.max(2, Math.round((threshold - (rect.bottom - y)) / 6))
-      autoScrollTimer.current = setInterval(() => { el.scrollTop += speed }, 16)
-    }
-  }, [])
-
+  // ── Reorder ───────────────────────────────────────────────────────────────
   const handleMoveUp = useCallback((id: string, parentId: string | null) => {
     const key = parentId ?? 'root'
     const ids = getSortedGroup(parentId).map(p => p.id)
@@ -465,6 +445,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     saveOrderMap({ ...orderMapRef.current, [key]: ids })
   }, [saveOrderMap, getSortedGroup])
 
+  // ── Page CRUD ─────────────────────────────────────────────────────────────
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
   const createPage = async (parentId: string | null = null) => {
@@ -510,6 +491,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     setTrashedPages([])
   }
 
+  // ── Sorted lists ──────────────────────────────────────────────────────────
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
     const key = a.parent_id ?? 'root'
@@ -522,6 +504,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
   })
   const topLevelPages = sortedPages.filter(p => p.parent_id === null)
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <aside className={`fixed inset-y-0 left-0 z-50 w-80 bg-white border-r border-slate-100 flex flex-col h-full transform transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
 
@@ -532,13 +515,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto py-2"
-        onDragOver={handleScrollAreaDragOver}
-        onDragLeave={() => { if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null } }}
-        onDrop={() => { if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null } }}
-      >
+      <div className="flex-1 overflow-y-auto py-2">
         <div className="px-2 mb-1">
           <button
             onClick={() => { router.push('/dashboard/calendar'); onClose() }}
@@ -555,11 +532,38 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           </button>
         </div>
 
-        <div className="px-4 mb-1 mt-3 flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">페이지</span>
-          <button onClick={() => createPage(null)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md p-1 transition-colors" title="새 페이지">
-            <Plus size={14} />
+        {/* 검색바 */}
+        <div className="px-3 mb-2 mt-2">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-search'))}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors text-slate-400"
+          >
+            <Search size={12} className="shrink-0" />
+            <span className="text-[12px] flex-1 text-left">검색...</span>
+            <kbd className="text-[10px] font-mono bg-white border border-slate-200 px-1 py-0.5 rounded text-slate-300">Ctrl K</kbd>
           </button>
+        </div>
+
+        <div className="px-4 mb-1 mt-1 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">페이지</span>
+          <div className="flex items-center gap-0.5">
+            {/* 순서 편집 버튼 */}
+            <button
+              onClick={() => setOrderModalOpen(true)}
+              className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md p-1 transition-colors"
+              title="순서 편집"
+            >
+              <ArrowUpDown size={13} />
+            </button>
+            {/* 새 페이지 버튼 */}
+            <button
+              onClick={() => createPage(null)}
+              className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md p-1 transition-colors"
+              title="새 페이지"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -570,33 +574,13 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
             <button onClick={() => createPage(null)} className="mt-1 text-slate-600 hover:text-slate-900 underline underline-offset-2">새 페이지 만들기</button>
           </div>
         ) : (
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={async (e) => {
-              // Drop on empty area below all pages → move to top level, last position
-              const sourceId = e.dataTransfer.getData('text/plain')
-              if (!sourceId) return
-              const pages = pagesRef.current
-              const sourcePage = pages.find(p => p.id === sourceId)
-              if (!sourcePage || sourcePage.parent_id === null) return
-              const oldKey = sourcePage.parent_id
-              const newMap = { ...orderMapRef.current }
-              newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
-              newMap['root'] = [...(newMap['root'] ?? []), sourceId]
-              setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: null } : p))
-              saveOrderMap(newMap)
-              setDragId(null); setDragOver(null)
-              await supabase.current.from('pages').update({ parent_id: null }).eq('id', sourceId)
-            }}
-          >
+          <div>
             {topLevelPages.map(page => (
               <PageItem
                 key={page.id} page={page} allPages={sortedPages} depth={0}
                 pathname={pathname} onNavigate={navigate}
-                onCreateChild={(parentId) => createPage(parentId)} onDelete={deletePage}
-                dragId={dragId} dragOver={dragOver}
-                onDragStart={handleDragStart} onDragOver={handleDragOver}
-                onDrop={handleDrop} onDragEnd={handleDragEnd}
+                onCreateChild={(parentId) => createPage(parentId)}
+                onDelete={deletePage}
                 onMoveUp={handleMoveUp} onMoveDown={handleMoveDown}
                 collapsedIds={collapsedIds} onToggleCollapsed={toggleCollapsed}
               />
@@ -604,6 +588,7 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           </div>
         )}
 
+        {/* Trash */}
         <div className="mt-4 px-2 border-t border-slate-100 pt-3">
           <div className="flex items-center w-full">
             <button
@@ -669,6 +654,19 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
           </button>
         </div>
       </div>
+
+      {/* Order edit modal */}
+      {orderModalOpen && (
+        <OrderModal
+          pages={sortedPages}
+          orderMap={orderMap}
+          onMoveUp={handleMoveUp}
+          onMoveDown={handleMoveDown}
+          onClose={() => setOrderModalOpen(false)}
+        />
+      )}
+
+      <SearchBar userName={userName} />
     </aside>
   )
 }
