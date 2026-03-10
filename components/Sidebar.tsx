@@ -394,40 +394,19 @@ export default function Sidebar({ userName, isOpen, onClose }: { userName: strin
     const targetPage = pages.find(p => p.id === targetId)
     if (!sourcePage || !targetPage) return
 
-    const newParentId = targetPage.parent_id
-    const oldParentId = sourcePage.parent_id
-    const newKey = newParentId ?? 'root'
-    const oldKey = oldParentId ?? 'root'
+    // 같은 레벨로만 이동 (종속 페이지에 실수로 drop 방지)
+    if (sourcePage.parent_id !== targetPage.parent_id) return
 
-    // 현재 그룹 전체 순서 (source 포함)
-    const fullGroup = getSortedGroup(newParentId)
-    const sourceCurrentIdx = fullGroup.findIndex(p => p.id === sourceId)
-    const targetCurrentIdx = fullGroup.findIndex(p => p.id === targetId)
+    const parentId = sourcePage.parent_id
+    const key = parentId ?? 'root'
 
-    // source 제외 siblings, target 위치 계산
-    const siblings = fullGroup.filter(p => p.id !== sourceId)
-    const newTargetIdx = siblings.findIndex(p => p.id === targetId)
-    let insertAt = zone === 'before' ? Math.max(0, newTargetIdx) : newTargetIdx + 1
-
-    // 인접 no-op 방지: 바로 옆 페이지에 before/after 드롭 시 swap 처리
-    if (sourceCurrentIdx >= 0) {
-      if (zone === 'before' && targetCurrentIdx === sourceCurrentIdx + 1) insertAt = newTargetIdx + 1
-      else if (zone === 'after' && targetCurrentIdx === sourceCurrentIdx - 1) insertAt = Math.max(0, newTargetIdx)
-    }
-
+    const siblings = getSortedGroup(parentId, sourceId)
+    const targetIdx = siblings.findIndex(p => p.id === targetId)
+    const insertAt = zone === 'before' ? Math.max(0, targetIdx) : targetIdx + 1
     const newOrder = siblings.map(p => p.id)
     newOrder.splice(insertAt, 0, sourceId)
 
-    const newMap = { ...orderMapRef.current, [newKey]: newOrder }
-    if (oldKey !== newKey) {
-      newMap[oldKey] = (newMap[oldKey] ?? []).filter(id => id !== sourceId)
-      setPages(prev => prev.map(p => p.id === sourceId ? { ...p, parent_id: newParentId } : p))
-    }
-    saveOrderMap(newMap)
-
-    if (oldParentId !== newParentId) {
-      await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', sourceId)
-    }
+    saveOrderMap({ ...orderMapRef.current, [key]: newOrder })
   }, [saveOrderMap, getSortedGroup])
 
   const handleDragEnd = useCallback(() => {
