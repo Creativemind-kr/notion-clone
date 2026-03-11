@@ -17,6 +17,7 @@ import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
 import Details, { DetailsSummary, DetailsContent } from '@tiptap/extension-details'
+import Youtube from '@tiptap/extension-youtube'
 import { insertToggleBlock } from '@/lib/editor-toggle'
 import { SlashCommands } from './SlashCommands'
 import { createClient } from '@/lib/supabase/client'
@@ -63,6 +64,10 @@ const COLORS = [
 function extractLinks(doc: Record<string, unknown>): string[] {
   const links: string[] = []
   function traverse(node: Record<string, unknown>) {
+    if (node.type === 'youtube') {
+      const src = (node.attrs as Record<string, unknown>)?.src as string | undefined
+      if (src) links.push(src)
+    }
     const marks = node.marks as Array<{ type: string; attrs?: { href?: string } }> | undefined
     if (marks) {
       for (const mark of marks) {
@@ -179,6 +184,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       Details.configure({ persist: true }),
       DetailsSummary,
       DetailsContent,
+      Youtube.configure({ width: 640, height: 360, addPasteHandler: true }),
       SlashCommands,
     ],
     content: (() => {

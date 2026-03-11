@@ -15,6 +15,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
+import Youtube from '@tiptap/extension-youtube'
 import { createClient } from '@/lib/supabase/client'
 import { FileText, ChevronRight } from 'lucide-react'
 
@@ -75,6 +76,7 @@ export default function SharePage() {
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: true }),
       TextStyle,
+      Youtube.configure({ width: 640, height: 360 }),
       Color,
       FontFamily,
       FontSize,

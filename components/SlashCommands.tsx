@@ -24,6 +24,10 @@ const commands = [
     const url = prompt('이미지 URL을 입력하세요:')
     if (url) editor.chain().focus().setImage({ src: url }).run()
   }},
+  { title: '유튜브', desc: 'YouTube 영상 삽입', icon: '▶', action: (editor: Editor) => {
+    const url = prompt('YouTube URL을 입력하세요:')
+    if (url) editor.commands.setYoutubeVideo({ src: url })
+  }},
   { title: '캘린더 (주차별)', desc: '이번 주 남은 일정', icon: '📅', action: async (editor: Editor) => {
     const userName = localStorage.getItem('workspace_user')
     if (!userName) return
