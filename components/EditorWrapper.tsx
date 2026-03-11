@@ -61,12 +61,22 @@ const COLORS = [
   '#c2255c', '#868e96', '#ced4da', '#ffffff',
 ]
 
-function extractLinks(doc: Record<string, unknown>): string[] {
+function extractYoutubeId(url: string): string | null {
+  const m =
+    url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) ||
+    url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/) ||
+    url.match(/embed\/([a-zA-Z0-9_-]{11})/)
+  return m?.[1] ?? null
+}
+
+function extractLinks(doc: Record<string, unknown>): { links: string[]; youtubeUrls: string[] } {
   const links: string[] = []
+  const youtubeUrls: string[] = []
   function traverse(node: Record<string, unknown>) {
     if (node.type === 'youtube') {
       const src = (node.attrs as Record<string, unknown>)?.src as string | undefined
-      if (src) links.push(src)
+      if (src) youtubeUrls.push(src)
+      return
     }
     const marks = node.marks as Array<{ type: string; attrs?: { href?: string } }> | undefined
     if (marks) {
@@ -78,7 +88,7 @@ function extractLinks(doc: Record<string, unknown>): string[] {
     if (content) for (const child of content) traverse(child)
   }
   traverse(doc)
-  return [...new Set(links)]
+  return { links: [...new Set(links)], youtubeUrls: [...new Set(youtubeUrls)] }
 }
 
 export default function EditorWrapper({ page }: { page: Page }) {
@@ -95,6 +105,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [imgCtxMenu, setImgCtxMenu] = useState<{ x: number; y: number; src: string } | null>(null)
   const [imgCopied, setImgCopied] = useState(false)
   const [docLinks, setDocLinks] = useState<string[]>([])
+  const [youtubeLinks, setYoutubeLinks] = useState<string[]>([])
   const [linkPreviews, setLinkPreviews] = useState<Record<string, OgPreview>>({})
   const fetchedUrls = useRef<Set<string>>(new Set())
   const isMounted = useRef(true)
@@ -246,8 +257,28 @@ export default function EditorWrapper({ page }: { page: Page }) {
   useEffect(() => {
     if (!editor) return undefined
     const syncLinks = () => {
-      const links = extractLinks(editor.getJSON() as Record<string, unknown>)
+      const { links, youtubeUrls } = extractLinks(editor.getJSON() as Record<string, unknown>)
       setDocLinks(links)
+      setYoutubeLinks(youtubeUrls)
+
+      // YouTube: API 호출 없이 직접 썸네일 구성
+      youtubeUrls.forEach((url) => {
+        if (fetchedUrls.current.has(url)) return
+        fetchedUrls.current.add(url)
+        const videoId = extractYoutubeId(url)
+        if (videoId) {
+          const preview: OgPreview = {
+            title: 'YouTube 영상',
+            description: null,
+            image: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            favicon: 'https://www.youtube.com/favicon.ico',
+            url,
+          }
+          if (isMounted.current) setLinkPreviews(prev => ({ ...prev, [url]: preview }))
+        }
+      })
+
+      // 일반 링크: og-preview API 호출
       links.forEach(async (url) => {
         if (fetchedUrls.current.has(url)) return
         fetchedUrls.current.add(url)
@@ -330,7 +361,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
   if (!editor) return null
 
-  const previewLinks = docLinks
+  const previewLinks = [...youtubeLinks, ...docLinks]
 
   return (
     <div className="flex flex-col h-full min-h-0">
