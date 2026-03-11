@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
       image: getOg('image'),
       favicon,
       url,
+    }, {
+      headers: { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' },
     })
   } catch {
     return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })
