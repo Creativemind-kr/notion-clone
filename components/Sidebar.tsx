@@ -85,12 +85,19 @@ function OrderModal({
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dropInfo, setDropInfo] = useState<{ targetId: string; before: boolean } | null>(null)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+
+  const toggleCollapse = (id: string) =>
+    setCollapsedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
 
   const getSortedSiblings = (parentId: string | null): Page[] =>
     sortSiblings(pages.filter(p => p.parent_id === parentId))
 
   const buildList = (parentId: string | null, depth: number): { page: Page; depth: number }[] =>
-    getSortedSiblings(parentId).flatMap(p => [{ page: p, depth }, ...buildList(p.id, depth + 1)])
+    getSortedSiblings(parentId).flatMap(p => [
+      { page: p, depth },
+      ...(collapsedIds.has(p.id) ? [] : buildList(p.id, depth + 1)),
+    ])
 
   const flat = buildList(null, 0)
   const draggedPage = draggedId ? pages.find(p => p.id === draggedId) : null
@@ -164,6 +171,16 @@ function OrderModal({
                 >
                   <GripVertical size={12} className="shrink-0 text-slate-300 cursor-grab active:cursor-grabbing" />
                   {depth > 0 && <span className="shrink-0 w-2.5 h-px bg-slate-200 inline-block" />}
+                  {pages.some(p => p.parent_id === page.id) ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleCollapse(page.id) }}
+                      className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+                    >
+                      {collapsedIds.has(page.id) ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 w-3" />
+                  )}
                   <FileText size={12} className="shrink-0 text-slate-300" />
                   <span className="flex-1 text-[13px] text-slate-700 truncate min-w-0">
                     {page.title || '제목 없음'}
