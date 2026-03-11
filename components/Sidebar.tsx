@@ -446,7 +446,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
           setPages(prev => prev.filter(p => p.id !== updated.id))
           setTrashedPages(prev => prev.find(p => p.id === updated.id) ? prev : [...prev, updated])
         } else {
-          setPages(prev => prev.map(p => p.id === updated.id ? { ...p, title: updated.title, sort_order: updated.sort_order ?? p.sort_order } : p))
+          setPages(prev => prev.map(p => p.id === updated.id ? { ...p, title: updated.title } : p))
           setTrashedPages(prev => prev.filter(p => p.id !== updated.id))
         }
       })
