@@ -62,15 +62,24 @@ function sortSiblings(pages: Page[]): Page[] {
   })
 }
 
+// 두 sort_order 사이의 중간값 계산 (Notion 방식: 이동 항목만 1회 업데이트)
+function midOrder(prev: number | null, next: number | null): number {
+  const GAP = 1000
+  if (prev === null && next === null) return GAP
+  if (prev === null) return Math.max(1, Math.floor(next! / 2))
+  if (next === null) return prev + GAP
+  return Math.floor((prev + next) / 2)
+}
+
 // ─── Order Edit Modal ─────────────────────────────────────────────────────────
 function OrderModal({
   pages,
-  onReorder,
+  onMove,
   onChangeParent,
   onClose,
 }: {
   pages: Page[]
-  onReorder: (parentId: string | null, newIds: string[]) => void
+  onMove: (id: string, prevId: string | null, nextId: string | null) => void
   onChangeParent: (id: string, newParentId: string | null, insertAfterId?: string) => void
   onClose: () => void
 }) {
@@ -95,7 +104,8 @@ function OrderModal({
     if (targetIdx < 0) return
     const newIds = filtered.map(p => p.id)
     newIds.splice(before ? targetIdx : targetIdx + 1, 0, draggedId)
-    onReorder(draggedPage.parent_id, newIds)
+    const newIdx = newIds.indexOf(draggedId)
+    onMove(draggedId, newIdx > 0 ? newIds[newIdx - 1] : null, newIdx < newIds.length - 1 ? newIds[newIdx + 1] : null)
     setDraggedId(null)
     setDropInfo(null)
   }
@@ -367,16 +377,39 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     sortSiblings(pagesRef.current.filter(p => p.parent_id === parentId && p.id !== excludeId))
   , [])
 
-  // ── sort_order 일괄 DB 업데이트 ───────────────────────────────────────────
-  const updateSortOrders = useCallback(async (ids: string[]) => {
-    await Promise.all(
-      ids.map((id, idx) => supabase.current.from('pages').update({ sort_order: Math.floor(idx) }).eq('id', id))
-    )
-    setPages(prev => prev.map(p => {
-      const idx = ids.indexOf(p.id)
-      return idx >= 0 ? { ...p, sort_order: Math.floor(idx) } : p
-    }))
+  // ── 그룹 전체 재정규화 (gap 부족 시 자동 호출) ───────────────────────────
+  const renormalizeGroup = useCallback(async (parentId: string | null) => {
+    const siblings = sortSiblings(pagesRef.current.filter(p => p.parent_id === parentId))
+    const updates = siblings.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 1000 }))
+    await Promise.all(updates.map(u =>
+      supabase.current.from('pages').update({ sort_order: u.sort_order }).eq('id', u.id)
+    ))
+    const updated = pagesRef.current.map(p => {
+      const u = updates.find(u => u.id === p.id)
+      return u ? { ...p, sort_order: u.sort_order } : p
+    })
+    pagesRef.current = updated
+    setPages(updated)
   }, [])
+
+  // ── 단일 페이지 이동 (1회 DB 쓰기) ──────────────────────────────────────
+  const movePage = useCallback(async (id: string, prevId: string | null, nextId: string | null, parentId: string | null) => {
+    const getOrder = (sid: string | null) => sid ? (pagesRef.current.find(p => p.id === sid)?.sort_order ?? null) : null
+    let prevOrder = getOrder(prevId)
+    let nextOrder = getOrder(nextId)
+    let newOrder = midOrder(prevOrder, nextOrder)
+
+    // gap 부족 시 재정규화 후 재계산
+    if ((prevOrder !== null && newOrder <= prevOrder) || (nextOrder !== null && newOrder >= nextOrder)) {
+      await renormalizeGroup(parentId)
+      prevOrder = getOrder(prevId)
+      nextOrder = getOrder(nextId)
+      newOrder = midOrder(prevOrder, nextOrder)
+    }
+
+    await supabase.current.from('pages').update({ sort_order: newOrder }).eq('id', id)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, sort_order: newOrder } : p))
+  }, [renormalizeGroup])
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchPages = useCallback(async () => {
@@ -425,55 +458,58 @@ export default function Sidebar({ userName, isOpen, onClose }: {
 
   // ── Reorder ───────────────────────────────────────────────────────────────
   const handleMoveUp = useCallback(async (id: string, parentId: string | null) => {
-    const ids = getSortedGroup(parentId).map(p => p.id)
-    const idx = ids.indexOf(id)
+    const siblings = getSortedGroup(parentId)
+    const idx = siblings.findIndex(p => p.id === id)
     if (idx <= 0) return
-    ;[ids[idx - 1], ids[idx]] = [ids[idx], ids[idx - 1]]
-    await updateSortOrders(ids)
-  }, [getSortedGroup, updateSortOrders])
+    const prevId = idx >= 2 ? siblings[idx - 2].id : null
+    const nextId = siblings[idx - 1].id
+    await movePage(id, prevId, nextId, parentId)
+  }, [getSortedGroup, movePage])
 
   const handleMoveDown = useCallback(async (id: string, parentId: string | null) => {
-    const ids = getSortedGroup(parentId).map(p => p.id)
-    const idx = ids.indexOf(id)
-    if (idx < 0 || idx >= ids.length - 1) return
-    ;[ids[idx], ids[idx + 1]] = [ids[idx + 1], ids[idx]]
-    await updateSortOrders(ids)
-  }, [getSortedGroup, updateSortOrders])
+    const siblings = getSortedGroup(parentId)
+    const idx = siblings.findIndex(p => p.id === id)
+    if (idx < 0 || idx >= siblings.length - 1) return
+    const prevId = siblings[idx + 1].id
+    const nextId = idx + 2 < siblings.length ? siblings[idx + 2].id : null
+    await movePage(id, prevId, nextId, parentId)
+  }, [getSortedGroup, movePage])
 
-  const handleReorder = useCallback(async (_parentId: string | null, newIds: string[]) => {
-    await updateSortOrders(newIds)
-  }, [updateSortOrders])
+  const handleMove = useCallback(async (id: string, prevId: string | null, nextId: string | null) => {
+    const page = pagesRef.current.find(p => p.id === id)
+    if (!page) return
+    await movePage(id, prevId, nextId, page.parent_id)
+  }, [movePage])
 
   const handleChangeParent = useCallback(async (id: string, newParentId: string | null, insertAfterId?: string) => {
     const page = pagesRef.current.find(p => p.id === id)
     if (!page) return
 
     await supabase.current.from('pages').update({ parent_id: newParentId }).eq('id', id)
-    setPages(prev => prev.map(p => p.id === id ? { ...p, parent_id: newParentId } : p))
-    // pagesRef 즉시 반영 (이후 getSortedGroup 호출에 사용)
     pagesRef.current = pagesRef.current.map(p => p.id === id ? { ...p, parent_id: newParentId } : p)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, parent_id: newParentId } : p))
 
-    // 기존 부모 형제 재정렬
-    const oldSiblings = getSortedGroup(page.parent_id, id)
-    if (oldSiblings.length > 0) await updateSortOrders(oldSiblings.map(p => p.id))
-
-    // 새 부모 형제 재정렬
+    // 새 부모에서 위치 결정 (삽입 기준 있으면 그 뒤, 없으면 맨 끝)
     const newSiblings = getSortedGroup(newParentId, id)
-    const newIds = newSiblings.map(p => p.id)
+    let prevId: string | null = null
+    let nextId: string | null = null
     if (insertAfterId) {
-      const insertIdx = newIds.indexOf(insertAfterId)
-      newIds.splice(insertIdx >= 0 ? insertIdx + 1 : newIds.length, 0, id)
+      const insertIdx = newSiblings.findIndex(p => p.id === insertAfterId)
+      prevId = insertAfterId
+      nextId = insertIdx >= 0 && insertIdx + 1 < newSiblings.length ? newSiblings[insertIdx + 1].id : null
     } else {
-      newIds.push(id)
+      prevId = newSiblings.length > 0 ? newSiblings[newSiblings.length - 1].id : null
     }
-    await updateSortOrders(newIds)
-  }, [getSortedGroup, updateSortOrders])
+    await movePage(id, prevId, nextId, newParentId)
+  }, [getSortedGroup, movePage])
 
   // ── Page CRUD ─────────────────────────────────────────────────────────────
   const navigate = (id: string) => { router.push(`/dashboard/page/${id}`); onClose() }
 
   const createPage = async (parentId: string | null = null) => {
-    const sort_order = getSortedGroup(parentId).length
+    const siblings = getSortedGroup(parentId)
+    const lastOrder = siblings.length > 0 ? (siblings[siblings.length - 1].sort_order ?? 0) : 0
+    const sort_order = lastOrder + 1000
     const { data, error } = await supabase.current.from('pages')
       .insert({ title: '제목 없음', content: '', author_name: userName, parent_id: parentId, sort_order })
       .select().single()
@@ -678,7 +714,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
       {orderModalOpen && (
         <OrderModal
           pages={sortedPages}
-          onReorder={handleReorder}
+          onMove={handleMove}
           onChangeParent={handleChangeParent}
           onClose={() => setOrderModalOpen(false)}
         />
