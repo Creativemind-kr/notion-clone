@@ -425,7 +425,9 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     }
 
     await supabase.current.from('pages').update({ sort_order: newOrder }).eq('id', id)
-    setPages(prev => prev.map(p => p.id === id ? { ...p, sort_order: newOrder } : p))
+    const finalPages = pagesRef.current.map(p => p.id === id ? { ...p, sort_order: newOrder } : p)
+    pagesRef.current = finalPages
+    setPages(finalPages)
   }, [renormalizeGroup])
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
