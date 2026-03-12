@@ -1,3 +1,5 @@
+import { ArrowLeft } from 'lucide-react'
+
 export default function DashboardPage() {
   const tips = [
     { icon: '📝', label: '새 페이지', desc: '사이드바 + 버튼 클릭' },
@@ -14,15 +16,14 @@ export default function DashboardPage() {
       <div className="text-center select-none max-w-xs w-full">
 
         {/* 애니메이션 화살표 */}
-        <div className="flex items-center justify-center gap-1 mb-6">
+        <div className="flex items-center justify-center gap-2 mb-6">
           {[0, 1, 2].map((i) => (
-            <span
+            <ArrowLeft
               key={i}
-              className="text-slate-300 text-xl animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            >
-              ←
-            </span>
+              size={20}
+              className="animate-slide-left text-blue-400"
+              style={{ animationDelay: `${i * 0.18}s` }}
+            />
           ))}
         </div>
 
