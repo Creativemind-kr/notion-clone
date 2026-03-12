@@ -107,6 +107,10 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [saveError, setSaveError] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showFontPicker, setShowFontPicker] = useState(false)
+  const [pageFont, setPageFont] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'inherit'
+    return localStorage.getItem(`page-font-${page.id}`) ?? 'inherit'
+  })
   const [showSizePicker, setShowSizePicker] = useState(false)
   const [fontSize, setFontSize] = useState(16)
   const [copied, setCopied] = useState(false)
@@ -391,7 +395,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
             <ChevronDown size={10} className="shrink-0 text-slate-400" />
           </button>
           {showFontPicker && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 min-w-[180px]">
+            <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 min-w-[200px] max-h-[80vh] overflow-y-auto">
+              <p className="text-[10px] text-slate-400 px-3 pt-1.5 pb-0.5">선택 영역에 적용</p>
               {FONTS.map(f => (
                 <button
                   key={f.value}
@@ -407,6 +412,37 @@ export default function EditorWrapper({ page }: { page: Page }) {
                 </button>
               ))}
               <div className="border-t border-slate-100 mt-1 pt-1">
+                <div className="px-2 pb-1 pt-0.5">
+                  <p className="text-[10px] text-slate-400 mb-1 px-1">전체 페이지 폰트</p>
+                  {FONTS.map(f => (
+                    <button
+                      key={`page-${f.value}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        setPageFont(f.value)
+                        localStorage.setItem(`page-font-${page.id}`, f.value)
+                        setShowFontPicker(false)
+                      }}
+                      className={`w-full text-left px-2 py-1 text-xs rounded-lg transition-colors ${pageFont === f.value ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                      style={{ fontFamily: f.value }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setPageFont('inherit')
+                      localStorage.removeItem(`page-font-${page.id}`)
+                      setShowFontPicker(false)
+                    }}
+                    className="w-full text-left px-2 py-1 text-xs text-slate-400 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    전체 초기화
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-slate-100 mt-1 pt-1">
                 <button
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -415,7 +451,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
                   }}
                   className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 transition-colors"
                 >
-                  기본으로 초기화
+                  선택 영역 초기화
                 </button>
               </div>
             </div>
@@ -600,7 +636,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
               placeholder="제목"
               className="w-full text-[2.5rem] font-bold text-slate-900 outline-none placeholder-slate-200 mb-8 bg-transparent leading-tight tracking-tight"
             />
-            <EditorContent editor={editor} className="tiptap" />
+            <div style={{ fontFamily: pageFont !== 'inherit' ? pageFont : undefined }}>
+              <EditorContent editor={editor} className="tiptap" />
+            </div>
           </div>
         </div>
 
