@@ -85,6 +85,23 @@ body {
   margin: 0.3em 0;
 }
 
+/* Tailwind Preflight이 list-style을 초기화하므로 명시적으로 복원 */
+.tiptap ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+}
+.tiptap ul:not([data-type="taskList"]) ul:not([data-type="taskList"]) {
+  list-style-type: circle;
+}
+.tiptap ul:not([data-type="taskList"]) ul:not([data-type="taskList"]) ul:not([data-type="taskList"]) {
+  list-style-type: square;
+}
+.tiptap ol {
+  list-style-type: decimal;
+}
+.tiptap ol ol {
+  list-style-type: lower-alpha;
+}
+
 .tiptap li {
   margin: 0.15em 0;
 }
