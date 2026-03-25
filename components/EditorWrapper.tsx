@@ -2,7 +2,8 @@
 
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
+import type { NodeViewProps } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -26,7 +27,7 @@ import {
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
-  ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe,
+  ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -69,6 +70,48 @@ function extractYoutubeId(url: string): string | null {
   return m?.[1] ?? null
 }
 
+// ─── YouTube 드래그 가능 노드뷰 ───────────────────────────────────────────────
+function YoutubeNodeView({ node }: NodeViewProps) {
+  const src = node.attrs.src as string
+  const width = (node.attrs.width as number) || 640
+  const height = (node.attrs.height as number) || 360
+  const videoId = extractYoutubeId(src)
+  const embedSrc = videoId
+    ? `https://www.youtube-nocookie.com/embed/${videoId}`
+    : src.includes('/embed/') ? src : null
+  if (!embedSrc) return null
+  return (
+    <NodeViewWrapper className="relative group my-4 max-w-full" style={{ display: 'block' }}>
+      <div contentEditable={false} className="relative">
+        {/* 드래그 핸들 */}
+        <div
+          data-drag-handle
+          className="absolute -left-7 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity p-1.5 hover:bg-slate-100 rounded z-10"
+          title="드래그하여 위치 이동"
+        >
+          <GripVertical size={14} className="text-slate-400" />
+        </div>
+        <iframe
+          src={embedSrc}
+          width={width}
+          height={height}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          className="rounded-lg max-w-full block"
+          title="YouTube video"
+        />
+      </div>
+    </NodeViewWrapper>
+  )
+}
+
+const DraggableYoutube = Youtube.extend({
+  draggable: true,
+  addNodeView() {
+    return ReactNodeViewRenderer(YoutubeNodeView)
+  },
+})
+
 function extractLinks(doc: Record<string, unknown>): { links: string[]; youtubeUrls: string[] } {
   const links: string[] = []
   const youtubeUrls: string[] = []
@@ -104,6 +147,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; anchor: number } | null>(null)
   const [linkPopup, setLinkPopup] = useState<{ href: string; x: number; y: number } | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [linkHover, setLinkHover] = useState<{ href: string; x: number; y: number } | null>(null)
+  const linkHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const linkHoverHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [imageModal, setImageModal] = useState<{ src: string; scale: number } | null>(null)
   const [imgCtxMenu, setImgCtxMenu] = useState<{ x: number; y: number; src: string } | null>(null)
   const [imgCopied, setImgCopied] = useState(false)
@@ -198,7 +244,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       Details.configure({ persist: true }),
       DetailsSummary,
       DetailsContent,
-      Youtube.configure({ width: 640, height: 360, addPasteHandler: true }),
+      DraggableYoutube.configure({ width: 640, height: 360, addPasteHandler: true }),
       SlashCommands,
     ],
     content: (() => {
@@ -330,6 +376,41 @@ export default function EditorWrapper({ page }: { page: Page }) {
       }
     })
   }
+
+  const showLinkHover = useCallback((href: string, anchor: HTMLAnchorElement) => {
+    if (linkHoverHideTimer.current) clearTimeout(linkHoverHideTimer.current)
+    const rect = anchor.getBoundingClientRect()
+    setLinkHover({ href, x: Math.min(rect.left, window.innerWidth - 340), y: rect.bottom + 8 })
+    // OG 데이터 없으면 패치
+    if (!fetchedUrls.current.has(href)) {
+      fetchedUrls.current.add(href)
+      fetch(`/api/og-preview?url=${encodeURIComponent(href)}`)
+        .then(r => r.json())
+        .then((data: OgPreview) => setLinkPreviews(prev => ({ ...prev, [href]: data })))
+        .catch(() => {})
+    }
+  }, [])
+
+  const hideLinkHover = useCallback(() => {
+    if (linkHoverHideTimer.current) clearTimeout(linkHoverHideTimer.current)
+    linkHoverHideTimer.current = setTimeout(() => setLinkHover(null), 200)
+  }, [])
+
+  const handleEditorMouseOver = useCallback((e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null
+    if (!anchor) return
+    const href = anchor.getAttribute('href')
+    if (!href || href.startsWith('#')) return
+    if (linkHoverTimer.current) clearTimeout(linkHoverTimer.current)
+    linkHoverTimer.current = setTimeout(() => showLinkHover(href, anchor), 400)
+  }, [showLinkHover])
+
+  const handleEditorMouseOut = useCallback((e: React.MouseEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement | null
+    if (relatedTarget?.closest('[data-link-hover]')) return
+    if (linkHoverTimer.current) clearTimeout(linkHoverTimer.current)
+    hideLinkHover()
+  }, [hideLinkHover])
 
   const handleEditorClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -543,6 +624,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
           className="flex-1 overflow-y-auto"
           onClick={handleEditorClick}
           onContextMenu={handleEditorContextMenu}
+          onMouseOver={handleEditorMouseOver}
+          onMouseOut={handleEditorMouseOut}
         >
           <div className="max-w-3xl mx-auto px-8 py-12">
             <input
@@ -895,6 +978,64 @@ export default function EditorWrapper({ page }: { page: Page }) {
               <Unlink size={11} />
             </button>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 링크 호버 미리보기 카드 */}
+      {linkHover && typeof window !== 'undefined' && createPortal(
+        <div
+          data-link-hover
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl w-72 overflow-hidden"
+          style={{ left: linkHover.x, top: linkHover.y }}
+          onMouseEnter={() => { if (linkHoverHideTimer.current) clearTimeout(linkHoverHideTimer.current) }}
+          onMouseLeave={hideLinkHover}
+        >
+          {(() => {
+            const p = linkPreviews[linkHover.href]
+            if (!p) return (
+              <div className="p-3 animate-pulse">
+                <div className="h-3 bg-slate-100 rounded w-3/4 mb-2" />
+                <div className="h-2.5 bg-slate-100 rounded w-full" />
+              </div>
+            )
+            return (
+              <>
+                {p.image && (
+                  <div className="w-full h-32 bg-slate-100 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.image} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  </div>
+                )}
+                <div className="p-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    {p.favicon
+                      ? <img src={p.favicon} alt="" className="w-3.5 h-3.5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />  // eslint-disable-line @next/next/no-img-element
+                      : <Globe size={11} className="text-slate-300 shrink-0" />}
+                    <span className="text-[10px] text-slate-400 truncate">
+                      {(() => { try { return new URL(linkHover.href).hostname } catch { return linkHover.href } })()}
+                    </span>
+                  </div>
+                  {p.title && <p className="text-[12px] font-semibold text-slate-800 leading-tight line-clamp-2 mb-1">{p.title}</p>}
+                  {p.description && <p className="text-[11px] text-slate-500 leading-tight line-clamp-2 mb-2">{p.description}</p>}
+                  <div className="flex gap-1.5 pt-1 border-t border-slate-100">
+                    <button
+                      onClick={() => window.open(linkHover.href, '_blank', 'noopener')}
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-xs text-slate-600 transition-colors"
+                    >
+                      <ExternalLink size={10} /> 열기
+                    </button>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(linkHover.href); hideLinkHover() }}
+                      className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-xs text-slate-600 transition-colors"
+                    >
+                      <Copy size={10} /> 복사
+                    </button>
+                  </div>
+                </div>
+              </>
+            )
+          })()}
         </div>,
         document.body
       )}
