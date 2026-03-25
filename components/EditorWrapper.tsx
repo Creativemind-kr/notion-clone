@@ -92,7 +92,7 @@ function YoutubeNodeView({ node, getPos, editor, selected }: NodeViewProps) {
     <NodeViewWrapper className="my-4 max-w-full group/yt" style={{ display: 'block' }}>
       <div
         contentEditable={false}
-        className={`inline-block rounded-lg relative transition-all ${selected ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+        className={`inline-block rounded-lg relative transition-all ${selected ? 'ring-2 ring-blue-500 ring-offset-2' : 'ring-2 ring-white ring-offset-1'}`}
       >
         {/* 선택 버튼 — hover 시 우상단에 표시, 클릭 시 노드 선택 */}
         <button
