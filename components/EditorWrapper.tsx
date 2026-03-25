@@ -70,8 +70,8 @@ function extractYoutubeId(url: string): string | null {
   return m?.[1] ?? null
 }
 
-// ─── YouTube 드래그 가능 노드뷰 ───────────────────────────────────────────────
-function YoutubeNodeView({ node }: NodeViewProps) {
+// ─── YouTube 노드뷰 (클릭 선택 → Ctrl+X/V로 이동) ────────────────────────────
+function YoutubeNodeView({ node, getPos, editor, selected }: NodeViewProps) {
   const src = node.attrs.src as string
   const width = (node.attrs.width as number) || 640
   const height = (node.attrs.height as number) || 360
@@ -80,24 +80,28 @@ function YoutubeNodeView({ node }: NodeViewProps) {
     ? `https://www.youtube-nocookie.com/embed/${videoId}`
     : src.includes('/embed/') ? src : null
   if (!embedSrc) return null
+
+  const handleClick = () => {
+    if (typeof getPos === 'function') {
+      editor.commands.setNodeSelection(getPos() as number)
+    }
+  }
+
   return (
-    <NodeViewWrapper className="relative group my-4 max-w-full" style={{ display: 'block' }}>
-      <div contentEditable={false} className="relative">
-        {/* 드래그 핸들 */}
-        <div
-          data-drag-handle
-          className="absolute -left-7 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity p-1.5 hover:bg-slate-100 rounded z-10"
-          title="드래그하여 위치 이동"
-        >
-          <GripVertical size={14} className="text-slate-400" />
-        </div>
+    <NodeViewWrapper className="my-4 max-w-full" style={{ display: 'block' }}>
+      <div
+        contentEditable={false}
+        onClick={handleClick}
+        className={`inline-block rounded-lg cursor-pointer transition-all ${selected ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-slate-200 hover:ring-offset-1'}`}
+        title="클릭으로 선택 후 Ctrl+X / Ctrl+V로 이동"
+      >
         <iframe
           src={embedSrc}
           width={width}
           height={height}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
-          className="rounded-lg max-w-full block"
+          className="rounded-lg max-w-full block pointer-events-none"
           title="YouTube video"
         />
       </div>
@@ -105,8 +109,7 @@ function YoutubeNodeView({ node }: NodeViewProps) {
   )
 }
 
-const DraggableYoutube = Youtube.extend({
-  draggable: true,
+const SelectableYoutube = Youtube.extend({
   addNodeView() {
     return ReactNodeViewRenderer(YoutubeNodeView)
   },
@@ -244,7 +247,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       Details.configure({ persist: true }),
       DetailsSummary,
       DetailsContent,
-      DraggableYoutube.configure({ width: 640, height: 360, addPasteHandler: true }),
+      SelectableYoutube.configure({ width: 640, height: 360, addPasteHandler: true }),
       SlashCommands,
     ],
     content: (() => {
@@ -627,7 +630,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
           onMouseOver={handleEditorMouseOver}
           onMouseOut={handleEditorMouseOut}
         >
-          <div className="max-w-3xl mx-auto px-8 py-12">
+          <div className="max-w-5xl mx-auto px-10 py-12">
             <input
               type="text"
               value={title}
