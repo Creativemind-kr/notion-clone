@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '스브스 전용 메모장★',
-  description: '스브스 전용 메모장',
+  title: 'Nomix',
+  description: 'Nomix의 저장공간',
 }
 
 export default function RootLayout({

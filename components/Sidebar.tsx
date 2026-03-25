@@ -588,7 +588,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
       <div className="px-4 py-4 border-b border-slate-100">
         <div className="flex items-center gap-2.5 px-1">
           <div className="w-7 h-7 bg-slate-900 rounded-lg text-white text-xs flex items-center justify-center font-bold shrink-0">S</div>
-          <span className="text-sm font-semibold text-slate-800 flex-1 truncate">스브스 워크스페이스</span>
+          <span className="text-sm font-semibold text-slate-800 flex-1 truncate">nomix Workspace</span>
         </div>
       </div>
 

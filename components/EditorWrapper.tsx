@@ -70,7 +70,7 @@ function extractYoutubeId(url: string): string | null {
   return m?.[1] ?? null
 }
 
-// ─── YouTube 노드뷰 (클릭 선택 → Ctrl+X/V로 이동) ────────────────────────────
+// ─── YouTube 노드뷰 (재생 가능 + 선택버튼으로 Ctrl+X/V 이동) ─────────────────
 function YoutubeNodeView({ node, getPos, editor, selected }: NodeViewProps) {
   const src = node.attrs.src as string
   const width = (node.attrs.width as number) || 640
@@ -81,27 +81,35 @@ function YoutubeNodeView({ node, getPos, editor, selected }: NodeViewProps) {
     : src.includes('/embed/') ? src : null
   if (!embedSrc) return null
 
-  const handleClick = () => {
+  const handleSelect = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (typeof getPos === 'function') {
       editor.commands.setNodeSelection(getPos() as number)
     }
   }
 
   return (
-    <NodeViewWrapper className="my-4 max-w-full" style={{ display: 'block' }}>
+    <NodeViewWrapper className="my-4 max-w-full group/yt" style={{ display: 'block' }}>
       <div
         contentEditable={false}
-        onClick={handleClick}
-        className={`inline-block rounded-lg cursor-pointer transition-all ${selected ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-slate-200 hover:ring-offset-1'}`}
-        title="클릭으로 선택 후 Ctrl+X / Ctrl+V로 이동"
+        className={`inline-block rounded-lg relative transition-all ${selected ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
       >
+        {/* 선택 버튼 — hover 시 우상단에 표시, 클릭 시 노드 선택 */}
+        <button
+          onMouseDown={handleSelect}
+          className="absolute top-2 right-2 z-10 opacity-0 group-hover/yt:opacity-100 bg-black/60 hover:bg-black/80 text-white text-[11px] px-2 py-1 rounded transition-opacity select-none"
+          title="선택 후 Ctrl+X로 잘라내기"
+        >
+          선택
+        </button>
+        {/* iframe — pointer-events 살려서 재생 가능 */}
         <iframe
           src={embedSrc}
           width={width}
           height={height}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
-          className="rounded-lg max-w-full block pointer-events-none"
+          className="rounded-lg max-w-full block"
           title="YouTube video"
         />
       </div>

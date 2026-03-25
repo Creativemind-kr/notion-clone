@@ -52,7 +52,7 @@ export default function LoginForm() {
           <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mb-5 shadow-lg">
             <FileText size={20} className="text-white" strokeWidth={1.8} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">스브스 메모장</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Nomix의 저장공간</h1>
           <p className="text-slate-400 text-sm mt-1.5">팀 전용 워크스페이스</p>
         </div>
 

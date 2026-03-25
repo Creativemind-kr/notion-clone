@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('id', id)
     .single()
 
-  const title = data?.title?.trim() || '스브스 메모장'
+  const title = data?.title?.trim() || 'Nomix의 저장공간'
   const url = `https://notion-clone-beta-jade.vercel.app/share/${id}`
 
   return {
