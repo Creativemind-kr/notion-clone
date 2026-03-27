@@ -629,7 +629,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       </div>
 
       {/* 메인 콘텐츠 영역 */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* 에디터 */}
         <div
           className="flex-1 overflow-y-auto"
@@ -659,7 +659,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
         {/* 링크 미리보기 우측 패널 */}
         {previewLinks.length > 0 && (
-          <div className="w-64 shrink-0 border-l border-slate-100 overflow-y-auto bg-slate-50/50">
+          <div className="w-full md:w-64 shrink-0 border-t md:border-t-0 md:border-l border-slate-100 overflow-y-auto bg-slate-50/50 max-h-60 md:max-h-none">
             <div className="p-3">
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2 px-1">링크</p>
               <div className="space-y-2">
