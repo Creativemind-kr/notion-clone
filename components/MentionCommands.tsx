@@ -2,6 +2,7 @@
 
 import { Extension } from '@tiptap/core'
 import Suggestion, { SuggestionOptions } from '@tiptap/suggestion'
+import { PluginKey } from '@tiptap/pm/state'
 import { ReactRenderer } from '@tiptap/react'
 import tippy, { Instance } from 'tippy.js'
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
@@ -98,6 +99,7 @@ export const MentionCommands = Extension.create({
 
     return [
       Suggestion({
+        pluginKey: new PluginKey('mentionCommands'),
         editor: this.editor,
         char: '@',
         command: ({ editor, range, props }) => {

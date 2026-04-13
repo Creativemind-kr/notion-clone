@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core'
 import { insertToggleBlock } from '@/lib/editor-toggle'
 import Suggestion, { SuggestionOptions } from '@tiptap/suggestion'
+import { PluginKey } from '@tiptap/pm/state'
 import { ReactRenderer } from '@tiptap/react'
 import tippy, { Instance } from 'tippy.js'
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
@@ -180,6 +181,7 @@ export const SlashCommands = Extension.create({
   addProseMirrorPlugins() {
     return [
       Suggestion({
+        pluginKey: new PluginKey('slashCommands'),
         editor: this.editor,
         char: '/',
         command: ({ editor, range, props }) => {

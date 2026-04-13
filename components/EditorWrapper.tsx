@@ -331,7 +331,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ strike: {} }),
+      StarterKit.configure({ strike: {}, link: false, underline: false }),
       Underline,
       TextStyle,
       Color,
