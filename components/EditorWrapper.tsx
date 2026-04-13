@@ -268,18 +268,35 @@ export default function EditorWrapper({ page }: { page: Page }) {
       handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items || [])
         const imageItem = items.find(item => item.type.startsWith('image/'))
-        if (!imageItem) return false
-        const file = imageItem.getAsFile()
-        if (!file) return false
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const src = e.target?.result as string
-          const node = view.state.schema.nodes.image.create({ src })
-          const tr = view.state.tr.replaceSelectionWith(node)
-          view.dispatch(tr)
+        if (imageItem) {
+          const file = imageItem.getAsFile()
+          if (!file) return false
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const src = e.target?.result as string
+            const node = view.state.schema.nodes.image.create({ src })
+            const tr = view.state.tr.replaceSelectionWith(node)
+            view.dispatch(tr)
+          }
+          reader.readAsDataURL(file)
+          return true
         }
-        reader.readAsDataURL(file)
-        return true
+
+        // plain text 붙여넣기: 단일 \n을 <br>로, 이중 \n\n을 </p><p>로 변환
+        const clipHtml = event.clipboardData?.getData('text/html')
+        const text = event.clipboardData?.getData('text/plain')
+        if (!clipHtml && text) {
+          event.preventDefault()
+          const html = text
+            .split(/\n\n+/)
+            .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+            .join('')
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(view as any).editor?.commands.insertContent(html)
+          return true
+        }
+
+        return false
       },
     },
     immediatelyRender: false,
