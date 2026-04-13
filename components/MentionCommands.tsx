@@ -5,11 +5,30 @@ import Suggestion, { SuggestionOptions } from '@tiptap/suggestion'
 import { ReactRenderer } from '@tiptap/react'
 import tippy, { Instance } from 'tippy.js'
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
-import { Editor } from '@tiptap/core'
 import { createClient } from '@/lib/supabase/client'
 import { FileText } from 'lucide-react'
 
 interface Page { id: string; title: string }
+
+// 페이지 캐시 (items는 동기여야 하므로 미리 로드)
+let cachedPages: Page[] = []
+let cacheLoaded = false
+
+async function loadPageCache() {
+  if (cacheLoaded) return
+  const userName = typeof window !== 'undefined' ? localStorage.getItem('workspace_user') : null
+  if (!userName) return
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('pages')
+    .select('id, title')
+    .eq('author_name', userName)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  cachedPages = data || []
+  cacheLoaded = true
+}
 
 interface MentionListProps {
   items: Page[]
@@ -22,8 +41,8 @@ export const MentionList = forwardRef<{ onKeyDown: (e: KeyboardEvent) => boolean
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ key }: KeyboardEvent) => {
-        if (key === 'ArrowUp') { setSelectedIndex((i) => (i - 1 + items.length) % items.length); return true }
-        if (key === 'ArrowDown') { setSelectedIndex((i) => (i + 1) % items.length); return true }
+        if (key === 'ArrowUp') { setSelectedIndex((i) => (i - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1)); return true }
+        if (key === 'ArrowDown') { setSelectedIndex((i) => (i + 1) % Math.max(items.length, 1)); return true }
         if (key === 'Enter') { if (items[selectedIndex]) command(items[selectedIndex]); return true }
         return false
       },
@@ -69,35 +88,25 @@ export const MentionCommands = Extension.create({
     return { suggestion: {} as Partial<SuggestionOptions> }
   },
   addProseMirrorPlugins() {
+    // 에디터 로드 시 캐시 미리 준비
+    if (typeof window !== 'undefined') loadPageCache()
+
     return [
       Suggestion({
         editor: this.editor,
         char: '@',
-        command: ({ editor, range, props }: { editor: Editor; range: { from: number; to: number }; props: Page }) => {
+        command: ({ editor, range, props }) => {
           const origin = typeof window !== 'undefined' ? window.location.origin : ''
-          const href = `${origin}/dashboard/page/${props.id}`
-          const label = props.title || '제목 없음'
-          editor
-            .chain()
-            .focus()
-            .deleteRange(range)
-            .insertContent(`<a href="${href}">${label}</a>`)
-            .run()
+          const href = `${origin}/dashboard/page/${(props as Page).id}`
+          const label = (props as Page).title || '제목 없음'
+          editor.chain().focus().deleteRange(range).insertContent(`<a href="${href}">${label}</a>`).run()
         },
-        items: async ({ query }: { query: string }) => {
-          const userName = typeof window !== 'undefined' ? localStorage.getItem('workspace_user') : null
-          if (!userName) return []
-          const supabase = createClient()
-          const { data } = await supabase
-            .from('pages')
-            .select('id, title')
-            .eq('author_name', userName)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .limit(50)
-          const pages: Page[] = data || []
-          if (!query) return pages
-          return pages.filter(p => (p.title || '').toLowerCase().includes(query.toLowerCase()))
+        // items는 반드시 동기 함수여야 함
+        items: ({ query }: { query: string }) => {
+          if (!query) return cachedPages.slice(0, 20)
+          return cachedPages.filter(p =>
+            (p.title || '').toLowerCase().includes(query.toLowerCase())
+          ).slice(0, 20)
         },
         render: () => {
           let component: ReactRenderer
@@ -105,6 +114,10 @@ export const MentionCommands = Extension.create({
 
           return {
             onStart: (props) => {
+              // @ 입력 시 캐시 갱신
+              cacheLoaded = false
+              loadPageCache()
+
               component = new ReactRenderer(MentionList, { props, editor: props.editor })
               popup = tippy('body', {
                 getReferenceClientRect: props.clientRect as () => DOMRect,
