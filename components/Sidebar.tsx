@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronLeft,
-  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical,
+  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical, Lock, Unlock,
 } from 'lucide-react'
 import SearchBar from '@/components/SearchBar'
 
@@ -44,6 +44,7 @@ interface Page {
   created_at: string
   deleted_at?: string | null
   sort_order: number | null
+  is_locked?: boolean
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@ function OrderModal({
 // ─── PageItem ─────────────────────────────────────────────────────────────────
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
-  onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed,
+  onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed, onToggleLock,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void
@@ -249,6 +250,7 @@ function PageItem({
   onMoveDown: (id: string, parentId: string | null) => void
   collapsedIds: Set<string>
   onToggleCollapsed: (id: string) => void
+  onToggleLock: (id: string, locked: boolean) => void
 }) {
   const expanded = !collapsedIds.has(page.id)
   const children = sortSiblings(allPages.filter(p => p.parent_id === page.id))
@@ -297,6 +299,9 @@ function PageItem({
             {page.title || '제목 없음'}
           </span>
         </Tooltip>
+        {page.is_locked && (
+          <Lock size={10} className={`shrink-0 ${isActive ? 'text-white/50' : 'text-slate-300'}`} />
+        )}
 
         {/* Action buttons */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
@@ -322,6 +327,13 @@ function PageItem({
             <FilePlus size={11} />
           </button>
           <button
+            onClick={(e) => { e.stopPropagation(); onToggleLock(page.id, !!page.is_locked) }}
+            className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
+            title={page.is_locked ? '잠금 해제' : '페이지 잠금'}
+          >
+            {page.is_locked ? <Unlock size={11} /> : <Lock size={11} />}
+          </button>
+          <button
             onClick={(e) => onDelete(e, page.id)}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-red-300' : 'text-slate-300 hover:text-red-400'}`}
             title="휴지통으로 이동"
@@ -345,6 +357,7 @@ function PageItem({
               onCreateChild={onCreateChild} onDelete={onDelete}
               onMoveUp={onMoveUp} onMoveDown={onMoveDown}
               collapsedIds={collapsedIds} onToggleCollapsed={onToggleCollapsed}
+              onToggleLock={onToggleLock}
             />
           ))}
         </div>
@@ -436,7 +449,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     await supabase.current.from('pages').delete()
       .eq('author_name', userName).not('deleted_at', 'is', null).lt('deleted_at', sevenDaysAgo)
     const { data } = await supabase.current.from('pages')
-      .select('id, title, parent_id, created_at, deleted_at, sort_order')
+      .select('id, title, parent_id, created_at, deleted_at, sort_order, is_locked')
       .eq('author_name', userName)
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
@@ -571,6 +584,11 @@ export default function Sidebar({ userName, isOpen, onClose }: {
     setTrashedPages([])
   }
 
+  const toggleLock = useCallback(async (id: string, locked: boolean) => {
+    await supabase.current.from('pages').update({ is_locked: !locked }).eq('id', id)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, is_locked: !locked } : p))
+  }, [])
+
   // ── Sorted lists ──────────────────────────────────────────────────────────
   const sortedPages = [...pages].sort((a, b) => {
     if (a.parent_id !== b.parent_id) return 0
@@ -658,6 +676,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
                 onDelete={deletePage}
                 onMoveUp={handleMoveUp} onMoveDown={handleMoveDown}
                 collapsedIds={collapsedIds} onToggleCollapsed={toggleCollapsed}
+                onToggleLock={toggleLock}
               />
             ))}
           </div>

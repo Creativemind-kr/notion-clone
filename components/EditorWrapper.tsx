@@ -21,18 +21,19 @@ import Details, { DetailsSummary, DetailsContent } from '@tiptap/extension-detai
 import Youtube from '@tiptap/extension-youtube'
 import { insertToggleBlock } from '@/lib/editor-toggle'
 import { SlashCommands } from './SlashCommands'
+import { MentionCommands } from './MentionCommands'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bold, Italic, UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3,
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
-  ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical,
+  ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical, Lock, FileText,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
 
-interface Page { id: string; title: string; content: string }
+interface Page { id: string; title: string; content: string; is_locked?: boolean }
 
 interface OgPreview {
   title?: string | null
@@ -123,6 +124,80 @@ const SelectableYoutube = Youtube.extend({
   },
 })
 
+// ─── 이미지 리사이즈 노드뷰 ────────────────────────────────────────────────────
+function ResizableImageView({ node, updateAttributes, selected, editor }: NodeViewProps) {
+  const src = node.attrs.src as string
+  const width = (node.attrs.width as number) || null
+  const resizing = useRef(false)
+  const startX = useRef(0)
+  const startW = useRef(0)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    resizing.current = true
+    startX.current = e.clientX
+    startW.current = imgRef.current?.offsetWidth || (width as number) || 400
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!resizing.current) return
+      const newW = Math.max(80, startW.current + ev.clientX - startX.current)
+      updateAttributes({ width: Math.round(newW) })
+    }
+    const onMouseUp = () => {
+      resizing.current = false
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  return (
+    <NodeViewWrapper className="relative inline-block group/img my-2" style={{ display: 'block' }}>
+      <div
+        contentEditable={false}
+        className={`relative inline-block ${selected ? 'ring-2 ring-blue-500 ring-offset-2 rounded-lg' : ''}`}
+        style={{ width: width ? `${width}px` : 'auto', maxWidth: '100%' }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          ref={imgRef}
+          src={src}
+          alt=""
+          style={{ width: '100%', display: 'block', borderRadius: 8 }}
+          draggable={false}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            // 기존 컨텍스트 메뉴 트리거 (EditorWrapper의 handleEditorContextMenu가 처리)
+          }}
+        />
+        {/* 우측 하단 리사이즈 핸들 */}
+        {editor.isEditable && (
+          <div
+            onMouseDown={onMouseDown}
+            className="absolute bottom-1 right-1 w-4 h-4 bg-blue-500 rounded-sm cursor-se-resize opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm z-10"
+            title="드래그해서 크기 조절"
+          />
+        )}
+      </div>
+    </NodeViewWrapper>
+  )
+}
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: { default: null, renderHTML: (attrs) => attrs.width ? { width: attrs.width } : {} },
+    }
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView)
+  },
+})
+
 function extractLinks(doc: Record<string, unknown>): { links: string[]; youtubeUrls: string[] } {
   const links: string[] = []
   const youtubeUrls: string[] = []
@@ -167,6 +242,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const [docLinks, setDocLinks] = useState<string[]>([])
   const [youtubeLinks, setYoutubeLinks] = useState<string[]>([])
   const [linkPreviews, setLinkPreviews] = useState<Record<string, OgPreview>>({})
+  const [backlinks, setBacklinks] = useState<{ id: string; title: string }[]>([])
   const fetchedUrls = useRef<Set<string>>(new Set())
   const isMounted = useRef(true)
   const titleRef = useRef(title)
@@ -198,6 +274,25 @@ export default function EditorWrapper({ page }: { page: Page }) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  // 백링크: 현재 페이지 ID를 content에 포함한 다른 페이지 조회
+  useEffect(() => {
+    const fetchBacklinks = async () => {
+      const { data } = await supabase.current
+        .from('pages')
+        .select('id, title, content')
+        .is('deleted_at', null)
+        .neq('id', page.id)
+      if (!data) return
+      const linked = data.filter(p => {
+        try {
+          return JSON.stringify(p.content).includes(page.id)
+        } catch { return false }
+      })
+      setBacklinks(linked.map(p => ({ id: p.id, title: p.title })))
+    }
+    fetchBacklinks()
+  }, [page.id])
 
   const saveSelection = () => {
     if (editor) {
@@ -250,13 +345,14 @@ export default function EditorWrapper({ page }: { page: Page }) {
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({ inline: false }),
+      ResizableImage.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
       Details.configure({ persist: true }),
       DetailsSummary,
       DetailsContent,
       SelectableYoutube.configure({ width: 640, height: 360, addPasteHandler: true }),
       SlashCommands,
+      MentionCommands,
     ],
     content: (() => {
       try { return page.content ? JSON.parse(page.content) : '' } catch { return page.content || '' }
@@ -305,6 +401,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
       },
     },
     immediatelyRender: false,
+    editable: !page.is_locked,
   })
 
   useEffect(() => {
@@ -314,6 +411,10 @@ export default function EditorWrapper({ page }: { page: Page }) {
       catch { editor.commands.setContent(page.content || '') }
     }
   }, [page.id, editor, page.title, page.content])
+
+  useEffect(() => {
+    if (editor) editor.setEditable(!page.is_locked)
+  }, [editor, page.is_locked])
 
   useEffect(() => {
     if (!editor) return undefined
@@ -483,7 +584,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* 상단 툴바 */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-3 py-1.5 flex items-center gap-0.5 flex-wrap">
+      <div className={`sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-3 py-1.5 flex items-center gap-0.5 flex-wrap print:hidden ${page.is_locked ? 'opacity-40 pointer-events-none' : ''}`}>
 
         {/* 글꼴 */}
         <select
@@ -661,10 +762,17 @@ export default function EditorWrapper({ page }: { page: Page }) {
           onMouseOut={handleEditorMouseOut}
         >
           <div className="max-w-5xl mx-auto px-10 py-12">
+            {page.is_locked && (
+              <div className="flex items-center gap-2 mb-6 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm print:hidden">
+                <Lock size={14} className="shrink-0" />
+                <span>이 페이지는 잠겨 있습니다. 사이드바에서 잠금을 해제하면 편집할 수 있어요.</span>
+              </div>
+            )}
             <input
               type="text"
               value={title}
               onChange={(e) => {
+                if (page.is_locked) return
                 const newTitle = e.target.value
                 setTitle(newTitle)
                 titleRef.current = newTitle
@@ -673,9 +781,31 @@ export default function EditorWrapper({ page }: { page: Page }) {
               }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editor?.commands.focus() } }}
               placeholder="제목"
-              className="w-full text-[2.5rem] font-bold text-slate-900 outline-none placeholder-slate-200 mb-8 bg-transparent leading-tight tracking-tight"
+              readOnly={!!page.is_locked}
+              className={`w-full text-[2.5rem] font-bold text-slate-900 outline-none placeholder-slate-200 mb-8 bg-transparent leading-tight tracking-tight ${page.is_locked ? 'cursor-default' : ''}`}
             />
             <EditorContent editor={editor} className="tiptap" />
+
+            {/* 백링크 */}
+            {backlinks.length > 0 && (
+              <div className="mt-12 pt-8 border-t border-slate-100 print:hidden">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                  이 페이지를 참조하는 문서 ({backlinks.length})
+                </p>
+                <div className="space-y-1">
+                  {backlinks.map(bl => (
+                    <a
+                      key={bl.id}
+                      href={`/dashboard/page/${bl.id}`}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors text-sm"
+                    >
+                      <FileText size={13} className="text-slate-300 shrink-0" />
+                      {bl.title || '제목 없음'}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

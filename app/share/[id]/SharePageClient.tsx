@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -21,6 +21,7 @@ import { createClient } from '@/lib/supabase/client'
 import { FileText, ChevronRight } from 'lucide-react'
 
 interface Page { id: string; title: string; content: string; author_name: string; parent_id: string | null }
+interface Comment { id: string; author_name: string; content: string; created_at: string }
 
 export default function SharePageClient({ id }: { id: string }) {
   const router = useRouter()
@@ -28,7 +29,12 @@ export default function SharePageClient({ id }: { id: string }) {
   const [children, setChildren] = useState<Page[]>([])
   const [breadcrumb, setBreadcrumb] = useState<Page[]>([])
   const [notFound, setNotFound] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [commentAuthor, setCommentAuthor] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const supabase = createClient()
+  const supabaseRef = useRef(supabase)
 
   useEffect(() => {
     const load = async () => {
@@ -63,6 +69,33 @@ export default function SharePageClient({ id }: { id: string }) {
     load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      const { data } = await supabaseRef.current
+        .from('comments')
+        .select('*')
+        .eq('page_id', id)
+        .order('created_at', { ascending: true })
+      setComments(data || [])
+    }
+    fetchComments()
+  }, [id])
+
+  const submitComment = async () => {
+    if (!commentAuthor.trim() || !commentText.trim()) return
+    setSubmitting(true)
+    const { data } = await supabaseRef.current
+      .from('comments')
+      .insert({ page_id: id, author_name: commentAuthor.trim(), content: commentText.trim() })
+      .select()
+      .single()
+    if (data) {
+      setComments(prev => [...prev, data])
+      setCommentText('')
+    }
+    setSubmitting(false)
+  }
 
   const editor = useEditor({
     extensions: [
@@ -169,6 +202,64 @@ export default function SharePageClient({ id }: { id: string }) {
             </div>
           </div>
         )}
+
+        {/* 댓글 */}
+        <div className="mt-12 pt-8 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+            댓글 {comments.length > 0 ? `(${comments.length})` : ''}
+          </p>
+
+          {/* 댓글 목록 */}
+          {comments.length > 0 && (
+            <div className="space-y-4 mb-6">
+              {comments.map(c => (
+                <div key={c.id} className="flex gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold text-gray-500 shrink-0">
+                    {c.author_name[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold text-gray-800">{c.author_name}</span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(c.created_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 댓글 작성 폼 */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <input
+              type="text"
+              value={commentAuthor}
+              onChange={(e) => setCommentAuthor(e.target.value)}
+              placeholder="이름"
+              maxLength={30}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 bg-white transition-colors"
+            />
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="댓글을 남겨보세요..."
+              rows={3}
+              maxLength={500}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-gray-400 bg-white resize-none transition-colors"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={submitComment}
+                disabled={submitting || !commentAuthor.trim() || !commentText.trim()}
+                className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {submitting ? '등록 중...' : '댓글 등록'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
