@@ -10,26 +10,6 @@ import { FileText } from 'lucide-react'
 
 interface Page { id: string; title: string }
 
-// 페이지 캐시 (items는 동기여야 하므로 미리 로드)
-let cachedPages: Page[] = []
-let cacheLoaded = false
-
-async function loadPageCache() {
-  if (cacheLoaded) return
-  const userName = typeof window !== 'undefined' ? localStorage.getItem('workspace_user') : null
-  if (!userName) return
-  const supabase = createClient()
-  const { data } = await supabase
-    .from('pages')
-    .select('id, title')
-    .eq('author_name', userName)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(100)
-  cachedPages = data || []
-  cacheLoaded = true
-}
-
 interface MentionListProps {
   items: Page[]
   command: (item: Page) => void
@@ -88,6 +68,31 @@ export const MentionCommands = Extension.create({
     return { suggestion: {} as Partial<SuggestionOptions> }
   },
   addProseMirrorPlugins() {
+    // 인스턴스별 캐시 (클로저로 격리 — 탭/사용자 간 데이터 섞임 방지)
+    let cachedPages: Page[] = []
+    let cacheLoaded = false
+    let pendingLoad: Promise<void> | null = null
+
+    function loadPageCache() {
+      if (cacheLoaded) return
+      if (pendingLoad) return  // 중복 요청 방지
+      const userName = typeof window !== 'undefined' ? localStorage.getItem('workspace_user') : null
+      if (!userName) return
+      const supabase = createClient()
+      pendingLoad = supabase
+        .from('pages')
+        .select('id, title')
+        .eq('author_name', userName)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(100)
+        .then(({ data }) => {
+          cachedPages = data || []
+          cacheLoaded = true
+          pendingLoad = null
+        }) as unknown as Promise<void>
+    }
+
     // 에디터 로드 시 캐시 미리 준비
     if (typeof window !== 'undefined') loadPageCache()
 
@@ -101,7 +106,7 @@ export const MentionCommands = Extension.create({
           const label = (props as Page).title || '제목 없음'
           editor.chain().focus().deleteRange(range).insertContent(`<a href="${href}">${label}</a>`).run()
         },
-        // items는 반드시 동기 함수여야 함
+        // items는 반드시 동기 함수여야 함 (Tiptap Suggestion async 미지원)
         items: ({ query }: { query: string }) => {
           if (!query) return cachedPages.slice(0, 20)
           return cachedPages.filter(p =>
@@ -114,8 +119,9 @@ export const MentionCommands = Extension.create({
 
           return {
             onStart: (props) => {
-              // @ 입력 시 캐시 갱신
+              // @ 입력 시 캐시 갱신 (cacheLoaded 리셋 후 재로드)
               cacheLoaded = false
+              pendingLoad = null
               loadPageCache()
 
               component = new ReactRenderer(MentionList, { props, editor: props.editor })
