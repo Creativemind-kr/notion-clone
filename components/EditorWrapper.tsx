@@ -265,6 +265,11 @@ export default function EditorWrapper({ page }: { page: Page }) {
       scheduleSave(titleRef.current, JSON.stringify(editor.getJSON()))
     },
     editorProps: {
+      clipboardTextSerializer: (slice) => {
+        const parts: string[] = []
+        slice.content.forEach(node => parts.push(node.textContent))
+        return parts.join('\n')
+      },
       handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items || [])
         const imageItem = items.find(item => item.type.startsWith('image/'))
