@@ -246,6 +246,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const fetchedUrls = useRef<Set<string>>(new Set())
   const isMounted = useRef(true)
   const titleRef = useRef(title)
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null)
 
   const copyLink = () => {
     const shareUrl = `${window.location.origin}/share/${page.id}`
@@ -404,11 +405,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
           return true
         }
 
-        // 외부 HTML 붙여넣기: <img> 태그의 외부 src 보존, 불필요한 속성 제거
+        // 외부 HTML 붙여넣기: 명시적으로 처리해서 서식 보존
         const clipHtml = event.clipboardData?.getData('text/html')
         if (clipHtml) {
-          // Tiptap 기본 HTML 붙여넣기 사용 (서식 보존)
-          return false
+          event.preventDefault()
+          editorRef.current?.commands.insertContent(clipHtml)
+          return true
         }
 
         // plain text 붙여넣기: 단일 \n을 <br>로, 이중 \n\n을 </p><p>로 변환
@@ -419,8 +421,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
             .split(/\n\n+/)
             .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
             .join('')
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ;(view as any).editor?.commands.insertContent(html)
+          editorRef.current?.commands.insertContent(html)
           return true
         }
 
@@ -430,6 +431,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
     immediatelyRender: false,
     editable: !page.is_locked,
   })
+
+  editorRef.current = editor
 
   useEffect(() => {
     setTitle(page.title)
@@ -582,6 +585,10 @@ export default function EditorWrapper({ page }: { page: Page }) {
     setShowColorPicker(false)
     setCtxMenu(null)
     setImgCtxMenu(null)
+    // 패딩/여백 클릭 시 에디터 포커스 → 이후 붙여넣기 가능
+    if (!target.closest('.ProseMirror')) {
+      editor?.commands.focus('end')
+    }
   }
 
   const handleEditorContextMenu = (e: React.MouseEvent) => {
