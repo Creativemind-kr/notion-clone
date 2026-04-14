@@ -372,21 +372,48 @@ export default function EditorWrapper({ page }: { page: Page }) {
         if (imageItem) {
           const file = imageItem.getAsFile()
           if (!file) return false
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const src = e.target?.result as string
+          event.preventDefault()
+
+          const insertImage = (src: string) => {
             const node = view.state.schema.nodes.image.create({ src })
             const tr = view.state.tr.replaceSelectionWith(node)
             view.dispatch(tr)
           }
-          reader.readAsDataURL(file)
+
+          const fallbackToBase64 = () => {
+            const reader = new FileReader()
+            reader.onload = (e) => insertImage(e.target?.result as string)
+            reader.readAsDataURL(file)
+          }
+
+          const ext = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png'
+          const fileName = `paste-${Date.now()}.${ext}`
+
+          supabase.current.storage
+            .from('page-images')
+            .upload(fileName, file, { contentType: file.type })
+            .then(({ data, error }) => {
+              if (error || !data) { fallbackToBase64(); return }
+              const { data: urlData } = supabase.current.storage
+                .from('page-images')
+                .getPublicUrl(data.path)
+              insertImage(urlData.publicUrl)
+            })
+            .catch(fallbackToBase64)
+
           return true
         }
 
-        // plain text 붙여넣기: 단일 \n을 <br>로, 이중 \n\n을 </p><p>로 변환
+        // 외부 HTML 붙여넣기: <img> 태그의 외부 src 보존, 불필요한 속성 제거
         const clipHtml = event.clipboardData?.getData('text/html')
+        if (clipHtml) {
+          // Tiptap 기본 HTML 붙여넣기 사용 (서식 보존)
+          return false
+        }
+
+        // plain text 붙여넣기: 단일 \n을 <br>로, 이중 \n\n을 </p><p>로 변환
         const text = event.clipboardData?.getData('text/plain')
-        if (!clipHtml && text) {
+        if (text) {
           event.preventDefault()
           const html = text
             .split(/\n\n+/)
