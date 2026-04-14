@@ -586,7 +586,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
     setCtxMenu(null)
     setImgCtxMenu(null)
     // 패딩/여백 클릭 시 에디터 포커스 → 이후 붙여넣기 가능
-    if (!target.closest('.ProseMirror')) {
+    // (input, button, a, select 등 인터랙티브 요소 클릭은 제외)
+    const interactive = target.closest('input, button, a, select, textarea, [contenteditable]')
+    if (!interactive) {
       editor?.commands.focus('end')
     }
   }
