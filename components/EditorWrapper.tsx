@@ -29,6 +29,7 @@ import {
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
   ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical, Lock, FileText,
+  Undo2, Redo2,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -585,11 +586,17 @@ export default function EditorWrapper({ page }: { page: Page }) {
     setShowColorPicker(false)
     setCtxMenu(null)
     setImgCtxMenu(null)
-    // 패딩/여백 클릭 시 에디터 포커스 → 이후 붙여넣기 가능
-    // (input, button, a, select 등 인터랙티브 요소 클릭은 제외)
     const interactive = target.closest('input, button, a, select, textarea, [contenteditable]')
     if (!interactive) {
-      editor?.commands.focus('end')
+      const editorDom = editor?.view.dom
+      if (editorDom) {
+        const rect = editorDom.getBoundingClientRect()
+        if (e.clientY > rect.bottom) {
+          editor?.commands.focus('end')
+        }
+      } else {
+        editor?.commands.focus('end')
+      }
     }
   }
 
@@ -620,7 +627,12 @@ export default function EditorWrapper({ page }: { page: Page }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* 상단 툴바 */}
-      <div className={`sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-3 py-1.5 flex items-center gap-0.5 flex-wrap print:hidden ${page.is_locked ? 'opacity-40 pointer-events-none' : ''}`}>
+      <div className={`sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-3 py-1.5 flex items-center gap-0.5 overflow-x-auto print:hidden ${page.is_locked ? 'opacity-40 pointer-events-none' : ''}`}>
+
+        {/* Undo / Redo */}
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().undo().run() }} title="실행 취소 (Ctrl+Z)" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0"><Undo2 size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().redo().run() }} title="다시 실행 (Ctrl+Y)" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0"><Redo2 size={13} /></button>
+        <div className="w-px h-4 bg-slate-200 mx-1 shrink-0" />
 
         {/* 글꼴 */}
         <select
@@ -704,10 +716,10 @@ export default function EditorWrapper({ page }: { page: Page }) {
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
         {/* 서식 */}
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run() }} title="굵게" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('bold') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Bold size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }} title="기울임" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('italic') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Italic size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }} title="밑줄" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('underline') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><UnderlineIcon size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }} title="취소선" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('strike') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Strikethrough size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run() }} title="굵게 (Ctrl+B)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('bold') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Bold size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }} title="기울임 (Ctrl+I)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('italic') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Italic size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }} title="밑줄 (Ctrl+U)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('underline') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><UnderlineIcon size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }} title="취소선 (Ctrl+Shift+S)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('strike') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Strikethrough size={13} /></button>
 
         {/* 글자 색상 */}
         <div className="relative ml-0.5">
@@ -738,27 +750,27 @@ export default function EditorWrapper({ page }: { page: Page }) {
           )}
         </div>
 
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHighlight({ color: '#FFF176' }).run() }} title="형광펜" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('highlight') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Highlighter size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHighlight({ color: '#FFF176' }).run() }} title="형광펜 (Ctrl+Shift+H)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('highlight') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Highlighter size={13} /></button>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
         {/* 제목 */}
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run() }} title="제목1" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('heading', { level: 1 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading1 size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run() }} title="제목2" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('heading', { level: 2 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading2 size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run() }} title="제목3" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('heading', { level: 3 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading3 size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run() }} title="제목1 (Ctrl+Alt+1)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('heading', { level: 1 }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading1 size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run() }} title="제목2 (Ctrl+Alt+2)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('heading', { level: 2 }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading2 size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run() }} title="제목3 (Ctrl+Alt+3)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('heading', { level: 3 }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Heading3 size={13} /></button>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
         {/* 목록 */}
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBulletList().run() }} title="글머리 목록" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('bulletList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><List size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleOrderedList().run() }} title="번호 목록" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('orderedList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><ListOrdered size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleTaskList().run() }} title="체크리스트" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('taskList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><ListChecks size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBulletList().run() }} title="글머리 목록 (Ctrl+Shift+8)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('bulletList') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><List size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleOrderedList().run() }} title="번호 목록 (Ctrl+Shift+7)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('orderedList') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><ListOrdered size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleTaskList().run() }} title="체크리스트" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('taskList') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><ListChecks size={13} /></button>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleCodeBlock().run() }} title="코드 블록" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('codeBlock') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Code size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBlockquote().run() }} title="인용구" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('blockquote') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Quote size={13} /></button>
-        <button onMouseDown={(e) => { e.preventDefault(); setLink() }} title="링크" className={`p-1.5 rounded-lg transition-colors ${editor.isActive('link') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Link2 size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleCodeBlock().run() }} title="코드 블록 (Ctrl+Alt+C)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('codeBlock') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Code size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBlockquote().run() }} title="인용구 (Ctrl+Shift+B)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('blockquote') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Quote size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); setLink() }} title="링크 (Ctrl+K)" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('link') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><Link2 size={13} /></button>
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
@@ -768,10 +780,9 @@ export default function EditorWrapper({ page }: { page: Page }) {
             insertToggleBlock(editor)
           }}
           title="접기 블록"
-          className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${editor.isActive('details') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}
+          className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive('details') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}
         >
           <ChevronDown size={13} />
-          <span className="text-xs font-medium">접기</span>
         </button>
 
         <div className="flex-1" />

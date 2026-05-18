@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import {
   FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronLeft,
-  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical, Lock, Unlock,
+  ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical, Lock, Unlock, Star,
 } from 'lucide-react'
 import SearchBar from '@/components/SearchBar'
 
@@ -240,7 +240,7 @@ function OrderModal({
 // ─── PageItem ─────────────────────────────────────────────────────────────────
 function PageItem({
   page, allPages, depth, pathname, onNavigate, onCreateChild, onDelete,
-  onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed, onToggleLock,
+  onMoveUp, onMoveDown, collapsedIds, onToggleCollapsed, onToggleLock, onTogglePin, pinnedIds,
 }: {
   page: Page; allPages: Page[]; depth: number; pathname: string
   onNavigate: (id: string) => void
@@ -251,6 +251,8 @@ function PageItem({
   collapsedIds: Set<string>
   onToggleCollapsed: (id: string) => void
   onToggleLock: (id: string, locked: boolean) => void
+  onTogglePin: (id: string) => void
+  pinnedIds: string[]
 }) {
   const expanded = !collapsedIds.has(page.id)
   const children = sortSiblings(allPages.filter(p => p.parent_id === page.id))
@@ -334,6 +336,17 @@ function PageItem({
             {page.is_locked ? <Unlock size={11} /> : <Lock size={11} />}
           </button>
           <button
+            onClick={(e) => { e.stopPropagation(); onTogglePin(page.id) }}
+            className={`p-0.5 rounded transition-colors ${
+              pinnedIds.includes(page.id)
+                ? (isActive ? 'text-yellow-300' : 'text-yellow-400 opacity-100')
+                : (isActive ? 'text-white/60 hover:text-yellow-300' : 'text-slate-300 hover:text-yellow-400')
+            }`}
+            title={pinnedIds.includes(page.id) ? '즐겨찾기 해제' : '즐겨찾기에 추가'}
+          >
+            <Star size={11} className={pinnedIds.includes(page.id) ? 'fill-current' : ''} />
+          </button>
+          <button
             onClick={(e) => onDelete(e, page.id)}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-red-300' : 'text-slate-300 hover:text-red-400'}`}
             title="휴지통으로 이동"
@@ -357,7 +370,7 @@ function PageItem({
               onCreateChild={onCreateChild} onDelete={onDelete}
               onMoveUp={onMoveUp} onMoveDown={onMoveDown}
               collapsedIds={collapsedIds} onToggleCollapsed={onToggleCollapsed}
-              onToggleLock={onToggleLock}
+              onToggleLock={onToggleLock} onTogglePin={onTogglePin} pinnedIds={pinnedIds}
             />
           ))}
         </div>
@@ -376,6 +389,10 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   const [trashOpen, setTrashOpen] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [orderModalOpen, setOrderModalOpen] = useState(false)
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`pinned_${userName}`) || '[]') }
+    catch { return [] }
+  })
 
   const pagesRef = useRef<Page[]>([])
   pagesRef.current = pages
@@ -398,6 +415,14 @@ export default function Sidebar({ userName, isOpen, onClose }: {
       if (next.has(id)) next.delete(id)
       else next.add(id)
       localStorage.setItem(`page-collapsed-${userName}`, JSON.stringify([...next]))
+      return next
+    })
+  }, [userName])
+
+  const togglePin = useCallback((id: string) => {
+    setPinnedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+      localStorage.setItem(`pinned_${userName}`, JSON.stringify(next))
       return next
     })
   }, [userName])
@@ -639,6 +664,38 @@ export default function Sidebar({ userName, isOpen, onClose }: {
           </button>
         </div>
 
+        {/* 즐겨찾기 */}
+        {pinnedIds.length > 0 && (
+          <div className="px-2 mt-1 mb-2">
+            <div className="px-3 mb-1 flex items-center gap-1.5">
+              <Star size={10} className="text-yellow-400 fill-yellow-400 shrink-0" />
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">즐겨찾기</span>
+            </div>
+            {pinnedIds.map(id => {
+              const page = pages.find(p => p.id === id)
+              if (!page) return null
+              const isActive = pathname === `/dashboard/page/${page.id}`
+              return (
+                <div
+                  key={id}
+                  className={`group flex items-center gap-1.5 py-1 px-3 mx-0 rounded-lg cursor-pointer transition-all ${isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                  onClick={() => navigate(page.id)}
+                >
+                  <Star size={11} className={`shrink-0 ${isActive ? 'text-yellow-300 fill-yellow-300' : 'text-yellow-400 fill-yellow-400'}`} />
+                  <span className="text-[12px] font-medium truncate flex-1">{page.title || '제목 없음'}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); togglePin(id) }}
+                    className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-red-400'}`}
+                    title="즐겨찾기 해제"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         <div className="px-4 mb-1 mt-1 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">페이지</span>
           <div className="flex items-center gap-0.5">
@@ -676,7 +733,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
                 onDelete={deletePage}
                 onMoveUp={handleMoveUp} onMoveDown={handleMoveDown}
                 collapsedIds={collapsedIds} onToggleCollapsed={toggleCollapsed}
-                onToggleLock={toggleLock}
+                onToggleLock={toggleLock} onTogglePin={togglePin} pinnedIds={pinnedIds}
               />
             ))}
           </div>
