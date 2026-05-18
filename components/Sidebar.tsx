@@ -274,14 +274,14 @@ function PageItem({
     <div className="relative">
       <div
         onClick={() => onNavigate(page.id)}
-        className={`group flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-1 ${rowCls}`}
+        className={`group relative flex items-center gap-1 py-1 mx-2 rounded-lg cursor-pointer transition-all pr-2 ${rowCls}`}
         style={{ paddingLeft: `${0.4 + depth * 1.1}rem` }}
       >
         {/* Expand / collapse */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleCollapsed(page.id) }}
           className={`shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors ${
-            isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-500'
+            isActive ? 'text-white/70 hover:text-white' : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           {children.length > 0
@@ -306,7 +306,7 @@ function PageItem({
         )}
 
         {/* Action buttons */}
-        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); onMoveUp(page.id, page.parent_id) }}
             className={`p-0.5 rounded transition-colors ${isActive ? 'text-white/60 hover:text-white' : 'text-slate-300 hover:text-slate-600'}`}
@@ -354,6 +354,7 @@ function PageItem({
             <Trash2 size={11} />
           </button>
         </div>
+
       </div>
 
       {/* Children + tree line */}
