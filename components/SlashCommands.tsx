@@ -21,6 +21,25 @@ const commands = [
   { title: '구분선', desc: '수평선', icon: '—', action: (editor: Editor) => editor.chain().focus().setHorizontalRule().run() },
   { title: '표', desc: '3x3 표 삽입', icon: '⊞', action: (editor: Editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
   { title: '접기', desc: '접을 수 있는 블록', icon: '▶', action: (editor: Editor) => insertToggleBlock(editor) },
+  { title: '2단 레이아웃', desc: '두 칸 나란히 배치', icon: '⬜', action: (editor: Editor) => {
+    editor.chain().focus().insertContent({
+      type: 'columns',
+      content: [
+        { type: 'column', content: [{ type: 'paragraph' }] },
+        { type: 'column', content: [{ type: 'paragraph' }] },
+      ],
+    }).run()
+  }},
+  { title: '3단 레이아웃', desc: '세 칸 나란히 배치', icon: '⬛', action: (editor: Editor) => {
+    editor.chain().focus().insertContent({
+      type: 'columns',
+      content: [
+        { type: 'column', content: [{ type: 'paragraph' }] },
+        { type: 'column', content: [{ type: 'paragraph' }] },
+        { type: 'column', content: [{ type: 'paragraph' }] },
+      ],
+    }).run()
+  }},
   { title: '이미지', desc: 'URL로 이미지 삽입', icon: '🖼', action: (editor: Editor) => {
     const url = prompt('이미지 URL을 입력하세요:')
     if (url) editor.chain().focus().setImage({ src: url }).run()

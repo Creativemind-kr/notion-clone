@@ -20,6 +20,7 @@ import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-s
 import Details, { DetailsSummary, DetailsContent } from '@tiptap/extension-details'
 import Youtube from '@tiptap/extension-youtube'
 import { insertToggleBlock } from '@/lib/editor-toggle'
+import { Columns, Column } from '@/lib/columns-extension'
 import { SlashCommands } from './SlashCommands'
 import { MentionCommands } from './MentionCommands'
 import { createClient } from '@/lib/supabase/client'
@@ -348,6 +349,8 @@ export default function EditorWrapper({ page }: { page: Page }) {
       TableHeader,
       TableCell,
       ResizableImage.configure({ inline: false }),
+      Columns,
+      Column,
       Link.configure({ openOnClick: false }),
       Details.configure({ persist: true }),
       DetailsSummary,
