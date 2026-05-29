@@ -373,10 +373,14 @@ export default function EditorWrapper({ page }: { page: Page }) {
       },
       handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items || [])
+
+        // items에서 이미지 찾기 (스크린샷, 웹에서 이미지 복사 등)
         const imageItem = items.find(item => item.type.startsWith('image/'))
-        if (imageItem) {
-          const file = imageItem.getAsFile()
-          if (!file) return false
+        // files에서 이미지 찾기 (Windows 파일 탐색기에서 파일 복사)
+        const fileFromFiles = Array.from(event.clipboardData?.files || []).find(f => f.type.startsWith('image/'))
+        const imageFile = imageItem?.getAsFile() ?? fileFromFiles ?? null
+
+        if (imageFile) {
           event.preventDefault()
 
           const insertImage = (src: string) => {
@@ -388,15 +392,15 @@ export default function EditorWrapper({ page }: { page: Page }) {
           const fallbackToBase64 = () => {
             const reader = new FileReader()
             reader.onload = (e) => insertImage(e.target?.result as string)
-            reader.readAsDataURL(file)
+            reader.readAsDataURL(imageFile)
           }
 
-          const ext = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png'
+          const ext = imageFile.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png'
           const fileName = `paste-${Date.now()}.${ext}`
 
           supabase.current.storage
             .from('page-images')
-            .upload(fileName, file, { contentType: file.type })
+            .upload(fileName, imageFile, { contentType: imageFile.type })
             .then(({ data, error }) => {
               if (error || !data) { fallbackToBase64(); return }
               const { data: urlData } = supabase.current.storage
@@ -409,11 +413,34 @@ export default function EditorWrapper({ page }: { page: Page }) {
           return true
         }
 
-        // 외부 HTML 붙여넣기: 명시적으로 처리해서 서식 보존
+        // HTML 붙여넣기
         const clipHtml = event.clipboardData?.getData('text/html')
         if (clipHtml) {
           event.preventDefault()
-          editorRef.current?.commands.insertContent(clipHtml)
+
+          // HTML 파싱해서 이미지/data URL 안전하게 처리
+          const tmpDoc = new DOMParser().parseFromString(clipHtml, 'text/html')
+          const imgs = Array.from(tmpDoc.querySelectorAll('img'))
+          const textContent = tmpDoc.body.textContent?.trim() || ''
+
+          // 텍스트 없이 이미지만 있는 경우 → 이미지 노드로 삽입
+          if (imgs.length > 0 && !textContent) {
+            for (const img of imgs) {
+              const src = img.getAttribute('src') || ''
+              if (src.startsWith('http')) {
+                const node = view.state.schema.nodes.image.create({ src })
+                view.dispatch(view.state.tr.replaceSelectionWith(node))
+              }
+            }
+            return true
+          }
+
+          // data: 이미지(base64)가 HTML에 포함되면 freeze 원인 → 제거 후 삽입
+          imgs.forEach(img => {
+            if ((img.getAttribute('src') || '').startsWith('data:')) img.remove()
+          })
+
+          editorRef.current?.commands.insertContent(tmpDoc.body.innerHTML)
           return true
         }
 
