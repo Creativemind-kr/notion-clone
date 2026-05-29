@@ -4,52 +4,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 
-function ColumnView({ node, editor, getPos }: NodeViewProps) {
-  const deleteColumn = () => {
-    if (typeof getPos !== 'function') return
-    const pos = getPos() as number
-    try {
-      const resolved = editor.state.doc.resolve(pos)
-      if (resolved.parent.childCount <= 1) return
-      editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run()
-    } catch {}
-  }
-
-  const canDelete = () => {
-    if (typeof getPos !== 'function') return false
-    try {
-      const pos = getPos() as number
-      const resolved = editor.state.doc.resolve(pos)
-      return resolved.parent.childCount > 1
-    } catch {
-      return false
-    }
-  }
-
-  return (
-    <NodeViewWrapper
-      style={{ flex: 1, minWidth: 0, position: 'relative' }}
-      className={`group/col rounded-lg transition-colors ${
-        editor.isEditable
-          ? 'border border-dashed border-slate-200 hover:border-slate-300 p-3'
-          : ''
-      }`}
-    >
-      {editor.isEditable && canDelete() && (
-        <button
-          contentEditable={false}
-          onMouseDown={(e) => { e.preventDefault(); deleteColumn() }}
-          className="absolute top-1 right-1 w-5 h-5 rounded bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 text-xs flex items-center justify-center opacity-0 group-hover/col:opacity-100 transition-opacity z-10"
-          title="열 삭제"
-        >
-          ×
-        </button>
-      )}
-      <NodeViewContent />
-    </NodeViewWrapper>
-  )
-}
-
+// Columns 전체 컨테이너 (flex 레이아웃 + 열 추가 버튼)
 function ColumnsView({ node, editor, getPos }: NodeViewProps) {
   const addColumn = () => {
     if (typeof getPos !== 'function') return
@@ -62,6 +17,7 @@ function ColumnsView({ node, editor, getPos }: NodeViewProps) {
 
   return (
     <NodeViewWrapper className="my-4 relative group/columns">
+      {/* NodeViewContent를 flex 컨테이너로: Column div들이 직접 flex item이 됨 */}
       <NodeViewContent
         as="div"
         style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}
@@ -80,6 +36,7 @@ function ColumnsView({ node, editor, getPos }: NodeViewProps) {
   )
 }
 
+// Column 개별 열: ReactNodeViewRenderer 제거 → renderHTML의 div가 직접 flex item
 export const Column = Node.create({
   name: 'column',
   content: 'block+',
@@ -99,10 +56,7 @@ export const Column = Node.create({
       0,
     ]
   },
-
-  addNodeView() {
-    return ReactNodeViewRenderer(ColumnView)
-  },
+  // addNodeView 없음 → ProseMirror가 renderHTML 결과를 직접 DOM으로 사용
 })
 
 export const Columns = Node.create({
@@ -119,7 +73,7 @@ export const Columns = Node.create({
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-type': 'columns',
-        style: 'display: flex; gap: 0.75rem; align-items: stretch;',
+        style: 'display: flex; gap: 12px; align-items: stretch;',
       }),
       0,
     ]

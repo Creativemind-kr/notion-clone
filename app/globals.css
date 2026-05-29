@@ -235,6 +235,16 @@ body {
 .tiptap [data-type="column"] {
   flex: 1;
   min-width: 0;
+  border-radius: 8px;
+}
+/* 편집 모드에서만 점선 테두리 표시 */
+.ProseMirror:not([contenteditable="false"]) [data-type="column"] {
+  border: 1px dashed #e2e8f0;
+  padding: 12px;
+  transition: border-color 0.15s;
+}
+.ProseMirror:not([contenteditable="false"]) [data-type="column"]:hover {
+  border-color: #cbd5e1;
 }
 .tiptap [data-type="column"] img {
   width: 100%;
