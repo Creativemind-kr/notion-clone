@@ -30,7 +30,7 @@ import {
   List, ListOrdered, ListChecks,
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
   ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical, Lock, FileText,
-  Undo2, Redo2,
+  Undo2, Redo2, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Combine, SplitSquareHorizontal,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -240,6 +240,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
   const linkHoverHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [imageModal, setImageModal] = useState<{ src: string; scale: number } | null>(null)
   const [imgCtxMenu, setImgCtxMenu] = useState<{ x: number; y: number; src: string } | null>(null)
+  const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [imgCopied, setImgCopied] = useState(false)
   const [docLinks, setDocLinks] = useState<string[]>([])
   const [youtubeLinks, setYoutubeLinks] = useState<string[]>([])
@@ -272,7 +273,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setCtxMenu(null); setImgCtxMenu(null); setImageModal(null); setShowSizePicker(false) }
+      if (e.key === 'Escape') { setCtxMenu(null); setImgCtxMenu(null); setImageModal(null); setShowSizePicker(false); setTableCtxMenu(null) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -616,6 +617,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
     setShowColorPicker(false)
     setCtxMenu(null)
     setImgCtxMenu(null)
+    setTableCtxMenu(null)
     const interactive = target.closest('input, button, a, select, textarea, [contenteditable]')
     if (!interactive) {
       const editorDom = editor?.view.dom
@@ -632,6 +634,22 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
   const handleEditorContextMenu = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
+
+    // 표 셀 우클릭 → 표 편집 메뉴
+    const tableCell = target.closest('td, th') as HTMLElement | null
+    if (tableCell && editor) {
+      e.preventDefault()
+      try {
+        const pos = editor.view.posAtDOM(tableCell, 0)
+        editor.chain().focus().setTextSelection(pos).run()
+      } catch { editor.commands.focus() }
+      setTableCtxMenu({
+        x: Math.min(e.clientX, window.innerWidth - 220),
+        y: Math.min(e.clientY, window.innerHeight - 340),
+      })
+      return
+    }
+
     if (target.tagName === 'IMG') {
       e.preventDefault()
       setImgCtxMenu({
@@ -990,6 +1008,63 @@ export default function EditorWrapper({ page }: { page: Page }) {
             className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>,
+        document.body
+      )}
+
+      {/* 표 셀 우클릭 컨텍스트 메뉴 */}
+      {tableCtxMenu && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl w-52 py-1.5 text-sm"
+          style={{ left: tableCtxMenu.x, top: tableCtxMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={() => { editor.chain().focus().addRowBefore().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <ArrowUp size={13} className="text-gray-400" /> 위에 행 추가
+          </button>
+          <button onClick={() => { editor.chain().focus().addRowAfter().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <ArrowDown size={13} className="text-gray-400" /> 아래에 행 추가
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          <button onClick={() => { editor.chain().focus().addColumnBefore().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <ArrowLeft size={13} className="text-gray-400" /> 왼쪽에 열 추가
+          </button>
+          <button onClick={() => { editor.chain().focus().addColumnAfter().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <ArrowRight size={13} className="text-gray-400" /> 오른쪽에 열 추가
+          </button>
+          {(editor.can().mergeCells() || editor.can().splitCell()) && (
+            <div className="border-t border-gray-100 my-1" />
+          )}
+          {editor.can().mergeCells() && (
+            <button onClick={() => { editor.chain().focus().mergeCells().run(); setTableCtxMenu(null) }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <Combine size={13} className="text-gray-400" /> 셀 합치기
+            </button>
+          )}
+          {editor.can().splitCell() && (
+            <button onClick={() => { editor.chain().focus().splitCell().run(); setTableCtxMenu(null) }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <SplitSquareHorizontal size={13} className="text-gray-400" /> 셀 나누기
+            </button>
+          )}
+          <div className="border-t border-gray-100 my-1" />
+          <button onClick={() => { editor.chain().focus().deleteRow().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <Trash2 size={13} className="text-gray-400" /> 행 삭제
+          </button>
+          <button onClick={() => { editor.chain().focus().deleteColumn().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <Trash2 size={13} className="text-gray-400" /> 열 삭제
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          <button onClick={() => { editor.chain().focus().deleteTable().run(); setTableCtxMenu(null) }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-red-500 hover:bg-red-50 transition-colors text-left">
+            <Trash2 size={13} /> 표 삭제
+          </button>
         </div>,
         document.body
       )}
