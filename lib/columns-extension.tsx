@@ -28,7 +28,8 @@ function ColumnView({ node, editor, getPos }: NodeViewProps) {
 
   return (
     <NodeViewWrapper
-      className={`relative flex-1 min-w-0 group/col rounded-lg transition-colors ${
+      style={{ flex: 1, minWidth: 0, position: 'relative' }}
+      className={`group/col rounded-lg transition-colors ${
         editor.isEditable
           ? 'border border-dashed border-slate-200 hover:border-slate-300 p-3'
           : ''
@@ -63,7 +64,7 @@ function ColumnsView({ node, editor, getPos }: NodeViewProps) {
     <NodeViewWrapper className="my-4 relative group/columns">
       <NodeViewContent
         as="div"
-        className="flex gap-3 items-stretch"
+        style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}
       />
       {editor.isEditable && node.childCount < 4 && (
         <button

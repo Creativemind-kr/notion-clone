@@ -225,6 +225,23 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
+/* 컬럼 레이아웃 */
+.tiptap [data-type="columns"] {
+  display: flex !important;
+  gap: 12px;
+  align-items: stretch;
+  margin: 1rem 0;
+}
+.tiptap [data-type="column"] {
+  flex: 1;
+  min-width: 0;
+}
+.tiptap [data-type="column"] img {
+  width: 100%;
+  height: auto;
+  margin: 0;
+}
+
 /* 접기 블록 */
 .tiptap [data-type="details"] {
   display: flex;
