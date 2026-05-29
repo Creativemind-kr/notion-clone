@@ -14,6 +14,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
+import TextAlign from '@tiptap/extension-text-align'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import { TextStyle, Color, FontFamily, FontSize } from '@tiptap/extension-text-style'
@@ -31,6 +32,7 @@ import {
   Code, Quote, Highlighter, Link2, Share2, Check, ChevronDown,
   ExternalLink, Copy, Pencil, Unlink, X, ZoomIn, Scissors, Clipboard, Globe, GripVertical, Lock, FileText,
   Undo2, Redo2, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Combine, SplitSquareHorizontal,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
 } from 'lucide-react'
 import 'tippy.js/dist/tippy.css'
 
@@ -187,6 +189,32 @@ function ResizableImageView({ node, updateAttributes, selected, editor }: NodeVi
     </NodeViewWrapper>
   )
 }
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: el => el.style.backgroundColor || null,
+        renderHTML: attrs => attrs.backgroundColor ? { style: `background-color: ${attrs.backgroundColor}` } : {},
+      },
+    }
+  },
+})
+
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: el => el.style.backgroundColor || null,
+        renderHTML: attrs => attrs.backgroundColor ? { style: `background-color: ${attrs.backgroundColor}` } : {},
+      },
+    }
+  },
+})
 
 const ResizableImage = Image.extend({
   addAttributes() {
@@ -345,10 +373,11 @@ export default function EditorWrapper({ page }: { page: Page }) {
       Highlight.configure({ multicolor: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Table.configure({ resizable: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      CustomTableHeader,
+      CustomTableCell,
       ResizableImage.configure({ inline: false }),
       Columns,
       Column,
@@ -822,6 +851,14 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
         <div className="w-px h-4 bg-slate-200 mx-1" />
 
+        {/* 정렬 */}
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setTextAlign('left').run() }} title="왼쪽 정렬" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive({ textAlign: 'left' }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><AlignLeft size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setTextAlign('center').run() }} title="가운데 정렬" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive({ textAlign: 'center' }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><AlignCenter size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setTextAlign('right').run() }} title="오른쪽 정렬" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive({ textAlign: 'right' }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><AlignRight size={13} /></button>
+        <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().setTextAlign('justify').run() }} title="양쪽 정렬" className={`p-1.5 rounded-lg transition-colors shrink-0 ${editor.isActive({ textAlign: 'justify' }) ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}><AlignJustify size={13} /></button>
+
+        <div className="w-px h-4 bg-slate-200 mx-1" />
+
         <button
           onMouseDown={(e) => {
             e.preventDefault()
@@ -1019,6 +1056,50 @@ export default function EditorWrapper({ page }: { page: Page }) {
           style={{ left: tableCtxMenu.x, top: tableCtxMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* 텍스트 정렬 */}
+          <div className="px-3 pt-1.5 pb-1">
+            <p className="text-[10px] text-gray-400 font-medium mb-1.5">텍스트 정렬</p>
+            <div className="flex gap-1">
+              {([
+                { align: 'left', icon: <AlignLeft size={13} />, title: '왼쪽' },
+                { align: 'center', icon: <AlignCenter size={13} />, title: '가운데' },
+                { align: 'right', icon: <AlignRight size={13} />, title: '오른쪽' },
+              ] as const).map(({ align, icon, title }) => (
+                <button key={align} title={title}
+                  onClick={() => { editor.chain().focus().setTextAlign(align).run(); setTableCtxMenu(null) }}
+                  className={`flex-1 flex items-center justify-center py-1.5 rounded border transition-colors ${editor.isActive({ textAlign: align }) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  {icon}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 셀 배경색 */}
+          <div className="px-3 pb-1.5">
+            <p className="text-[10px] text-gray-400 font-medium mb-1.5">셀 배경색</p>
+            <div className="flex flex-wrap gap-1">
+              {['#FFF9C4','#C8E6C9','#BBDEFB','#F8BBD0','#FFE0B2','#E1BEE7','#B2EBF2','#FFCCBC','#F5F5F5','#CFD8DC'].map(color => (
+                <button key={color}
+                  onClick={() => {
+                    editor.chain().focus().updateAttributes('tableCell', { backgroundColor: color }).run()
+                    editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: color }).run()
+                    setTableCtxMenu(null)
+                  }}
+                  className="w-6 h-6 rounded border border-gray-200 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+              <button
+                onClick={() => {
+                  editor.chain().focus().updateAttributes('tableCell', { backgroundColor: null }).run()
+                  editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: null }).run()
+                  setTableCtxMenu(null)
+                }}
+                className="text-[10px] text-gray-400 hover:text-gray-600 px-1">없음</button>
+            </div>
+          </div>
+          <div className="border-t border-gray-100 my-1" />
+
           <button onClick={() => { editor.chain().focus().addRowBefore().run(); setTableCtxMenu(null) }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors text-left">
             <ArrowUp size={13} className="text-gray-400" /> 위에 행 추가
@@ -1224,6 +1305,27 @@ export default function EditorWrapper({ page }: { page: Page }) {
               ))}
               <button onClick={() => { editor.chain().focus().unsetHighlight().run(); setCtxMenu(null) }}
                 className="text-xs text-gray-400 hover:text-gray-600 ml-1">제거</button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 my-1.5" />
+
+          {/* 텍스트 정렬 */}
+          <div className="px-3">
+            <p className="text-xs text-gray-400 font-medium mb-1">정렬</p>
+            <div className="flex gap-1">
+              {([
+                { align: 'left', icon: <AlignLeft size={13} />, title: '왼쪽' },
+                { align: 'center', icon: <AlignCenter size={13} />, title: '가운데' },
+                { align: 'right', icon: <AlignRight size={13} />, title: '오른쪽' },
+                { align: 'justify', icon: <AlignJustify size={13} />, title: '양쪽' },
+              ] as const).map(({ align, icon, title }) => (
+                <button key={align} title={title}
+                  onClick={() => { editor.chain().focus().setTextAlign(align).run(); setCtxMenu(null) }}
+                  className={`flex-1 flex items-center justify-center py-1.5 rounded border transition-colors ${editor.isActive({ textAlign: align }) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  {icon}
+                </button>
+              ))}
             </div>
           </div>
 
