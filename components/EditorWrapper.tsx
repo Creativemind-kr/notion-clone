@@ -75,6 +75,34 @@ function extractYoutubeId(url: string): string | null {
   return m?.[1] ?? null
 }
 
+// ─── 붙여넣기 시 LaTeX 기호 → 유니코드 변환 (이 에디터는 수식 렌더러가 없어서 ChatGPT/Claude 등에서
+// 복사한 "$\rightarrow$" 같은 텍스트가 그대로 노출됨) ─────────────────────────────────
+const LATEX_SYMBOL_MAP: Record<string, string> = {
+  rightarrow: '→', to: '→', Rightarrow: '⇒', longrightarrow: '⟶',
+  leftarrow: '←', Leftarrow: '⇐', longleftarrow: '⟵',
+  leftrightarrow: '↔', Leftrightarrow: '⇔',
+  times: '×', div: '÷', pm: '±', mp: '∓', cdot: '·',
+  le: '≤', leq: '≤', ge: '≥', geq: '≥', neq: '≠', ne: '≠',
+  approx: '≈', equiv: '≡', sim: '∼', propto: '∝',
+  infty: '∞', partial: '∂', nabla: '∇', sqrt: '√',
+  in: '∈', notin: '∉', subset: '⊂', supset: '⊃', cup: '∪', cap: '∩',
+  forall: '∀', exists: '∃', emptyset: '∅',
+  sum: '∑', prod: '∏', int: '∫',
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε',
+  theta: 'θ', lambda: 'λ', mu: 'μ', pi: 'π', sigma: 'σ', phi: 'φ', omega: 'ω',
+}
+
+function normalizeMathText(text: string): string {
+  if (!text.includes('\\') && !text.includes('$')) return text
+  // $...$ 또는 $$...$$ 안에 알려진 명령어 하나만 있는 경우 통째로 치환
+  let result = text.replace(/\$\$?\s*\\([a-zA-Z]+)\s*\$\$?/g, (match, cmd) =>
+    LATEX_SYMBOL_MAP[cmd] ?? match
+  )
+  // 나머지 남은 개별 명령어(\rightarrow 등)도 치환
+  result = result.replace(/\\([a-zA-Z]+)/g, (match, cmd) => LATEX_SYMBOL_MAP[cmd] ?? match)
+  return result
+}
+
 // ─── YouTube 노드뷰 (재생 가능 + 선택버튼으로 Ctrl+X/V 이동) ─────────────────
 function YoutubeNodeView({ node, getPos, editor, selected }: NodeViewProps) {
   const src = node.attrs.src as string
@@ -450,6 +478,17 @@ export default function EditorWrapper({ page }: { page: Page }) {
 
           // HTML 파싱해서 이미지/data URL 안전하게 처리
           const tmpDoc = new DOMParser().parseFromString(clipHtml, 'text/html')
+
+          // 텍스트 노드에 남아있는 LaTeX 기호 표기(예: $\rightarrow$)를 유니코드로 변환
+          const normalizeTextNodes = (node: Node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              if (node.textContent) node.textContent = normalizeMathText(node.textContent)
+            } else {
+              node.childNodes.forEach(normalizeTextNodes)
+            }
+          }
+          normalizeTextNodes(tmpDoc.body)
+
           const imgs = Array.from(tmpDoc.querySelectorAll('img'))
           const textContent = tmpDoc.body.textContent?.trim() || ''
 
@@ -478,7 +517,7 @@ export default function EditorWrapper({ page }: { page: Page }) {
         const text = event.clipboardData?.getData('text/plain')
         if (text) {
           event.preventDefault()
-          const html = text
+          const html = normalizeMathText(text)
             .split(/\n\n+/)
             .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
             .join('')

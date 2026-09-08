@@ -8,8 +8,6 @@ import {
   FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronLeft,
   ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical, Lock, Unlock, Star,
 } from 'lucide-react'
-import SearchBar from '@/components/SearchBar'
-
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -815,8 +813,6 @@ export default function Sidebar({ userName, isOpen, onClose }: {
           onClose={() => setOrderModalOpen(false)}
         />
       )}
-
-      <SearchBar userName={userName} />
     </aside>
   )
 }
