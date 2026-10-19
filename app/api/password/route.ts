@@ -9,6 +9,9 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 // mode 'change' : 본인이 현재 비밀번호를 확인한 뒤 새 비밀번호로 변경
 // mode 'reset'  : 관리자가 자기 비밀번호를 확인한 뒤 다른 사용자를 임시 비밀번호로 초기화
 export async function POST(req: NextRequest) {
+  if (!SUPABASE_SERVICE_KEY) {
+    return NextResponse.json({ error: '서버에 SUPABASE_SERVICE_ROLE_KEY가 설정되지 않아 비밀번호를 바꿀 수 없어요.' }, { status: 500 })
+  }
   try {
     const body = await req.json()
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -27,8 +30,10 @@ export async function POST(req: NextRequest) {
       if (!(await checkPassword(name, currentPassword))) {
         return NextResponse.json({ error: '현재 비밀번호가 틀렸어요.' }, { status: 401 })
       }
-      const { error } = await supabase.from('users').update({ password: newPassword }).eq('name', name)
+      const { data, error } = await supabase
+        .from('users').update({ password: newPassword }).eq('name', name).select('name')
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data?.length) return NextResponse.json({ error: '비밀번호를 저장하지 못했어요.' }, { status: 500 })
       return NextResponse.json({ ok: true })
     }
 
