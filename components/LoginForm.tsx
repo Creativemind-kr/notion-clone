@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { FileText, Eye, EyeOff } from 'lucide-react'
+import { FileText, Eye, EyeOff, KeyRound } from 'lucide-react'
 
 export default function LoginForm() {
   const [name, setName] = useState('')
@@ -10,6 +10,7 @@ export default function LoginForm() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showForgot, setShowForgot] = useState(false)
   const [redirect, setRedirect] = useState('/dashboard')
 
   useEffect(() => {
@@ -101,6 +102,21 @@ export default function LoginForm() {
               ) : '입장하기'}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <button type="button" onClick={() => setShowForgot(!showForgot)}
+              className="text-xs text-slate-400 hover:text-slate-700 hover:underline underline-offset-2 transition-colors">
+              비밀번호를 잊으셨나요?
+            </button>
+          </div>
+          {showForgot && (
+            <div className="mt-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed break-keep">
+              이름과 비밀번호만으로 가입하는 방식이라 직접 찾을 수는 없어요.{' '}
+              <span className="font-semibold text-slate-800">관리자에게 초기화를 요청</span>하면 임시 비밀번호를 받을 수 있어요.
+              임시 비밀번호로 입장한 뒤 왼쪽 아래 내 이름 옆{' '}
+              <KeyRound size={11} className="inline -mt-0.5" /> 아이콘에서 새 비밀번호로 바꿔주세요.
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-5">처음 입력하는 이름 + 비밀번호로 자동 가입</p>

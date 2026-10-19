@@ -7,7 +7,10 @@ import { useRouter, usePathname } from 'next/navigation'
 import {
   FileText, Plus, Trash2, LogOut, ChevronDown, ChevronRight, ChevronLeft,
   ChevronUp, FilePlus, RotateCcw, X, Calendar, ArrowUpDown, Search, GripVertical, Lock, Unlock, Star,
+  KeyRound, UserCog,
 } from 'lucide-react'
+import { ChangePasswordModal, AdminResetModal } from '@/components/PasswordModals'
+import { ADMIN_NAME } from '@/lib/admin'
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -388,6 +391,7 @@ export default function Sidebar({ userName, isOpen, onClose }: {
   const [trashOpen, setTrashOpen] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [orderModalOpen, setOrderModalOpen] = useState(false)
+  const [passwordModal, setPasswordModal] = useState<'change' | 'reset' | null>(null)
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(`pinned_${userName}`) || '[]') }
     catch { return [] }
@@ -795,15 +799,40 @@ export default function Sidebar({ userName, isOpen, onClose }: {
           <Tooltip text={userName}>
             <span className="text-[13px] text-slate-600 truncate block font-medium">{userName}</span>
           </Tooltip>
-          <button
-            onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }}
-            className="text-slate-300 hover:text-slate-600 transition-colors ml-auto"
-            title="로그아웃"
-          >
-            <LogOut size={13} />
-          </button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            {userName === ADMIN_NAME && (
+              <button
+                onClick={() => setPasswordModal('reset')}
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+                title="비밀번호 초기화 (관리자)"
+              >
+                <UserCog size={13} />
+              </button>
+            )}
+            <button
+              onClick={() => setPasswordModal('change')}
+              className="text-slate-300 hover:text-slate-600 transition-colors"
+              title="비밀번호 변경"
+            >
+              <KeyRound size={13} />
+            </button>
+            <button
+              onClick={() => { localStorage.removeItem('workspace_user'); window.location.href = '/login' }}
+              className="text-slate-300 hover:text-slate-600 transition-colors"
+              title="로그아웃"
+            >
+              <LogOut size={13} />
+            </button>
+          </div>
         </div>
       </div>
+
+      {passwordModal === 'change' && (
+        <ChangePasswordModal userName={userName} onClose={() => setPasswordModal(null)} />
+      )}
+      {passwordModal === 'reset' && (
+        <AdminResetModal onClose={() => setPasswordModal(null)} />
+      )}
 
       {orderModalOpen && (
         <OrderModal
