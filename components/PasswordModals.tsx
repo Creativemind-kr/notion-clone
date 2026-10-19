@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
-import { ADMIN_NAME } from '@/lib/admin'
-import { X, Copy, Check } from 'lucide-react'
+import { ADMIN_NAME, RESET_PASSWORD } from '@/lib/admin'
+import { X } from 'lucide-react'
 
 const inputClass =
   'w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-300 focus:outline-none focus:bg-white focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all'
@@ -113,8 +113,7 @@ export function AdminResetModal({ onClose }: { onClose: () => void }) {
   const [users, setUsers] = useState<string[] | null>(null)
   const [confirmName, setConfirmName] = useState<string | null>(null)
   const [loadingName, setLoadingName] = useState<string | null>(null)
-  const [result, setResult] = useState<{ name: string; tempPassword: string } | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [resetName, setResetName] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -127,11 +126,10 @@ export function AdminResetModal({ onClose }: { onClose: () => void }) {
     if (confirmName !== name) { setConfirmName(name); return }
     setLoadingName(name)
     setError('')
-    setResult(null)
-    setCopied(false)
+    setResetName(null)
     try {
-      const data = await postPassword({ mode: 'reset', adminPassword, targetName: name })
-      setResult({ name, tempPassword: data.tempPassword })
+      await postPassword({ mode: 'reset', adminPassword, targetName: name })
+      setResetName(name)
     } catch (err) {
       setError((err as Error).message)
     }
@@ -139,27 +137,18 @@ export function AdminResetModal({ onClose }: { onClose: () => void }) {
     setLoadingName(null)
   }
 
-  const copyTemp = async () => {
-    if (!result) return
-    try { await navigator.clipboard.writeText(result.tempPassword); setCopied(true) } catch {}
-  }
-
   return (
-    <ModalShell title="비밀번호 초기화" subtitle="초기화하면 6자리 임시 비밀번호가 발급돼요" onClose={onClose}>
+    <ModalShell title="비밀번호 초기화" subtitle={`초기화하면 비밀번호가 ${RESET_PASSWORD}로 바뀌어요`} onClose={onClose}>
       <div className="px-5 pt-4 pb-3 space-y-3 border-b border-slate-100">
         <input type="password" value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setError('') }}
           autoFocus placeholder="관리자 비밀번호 확인" className={inputClass} />
         {error && <ErrorBox message={error} />}
-        {result && (
+        {resetName && (
           <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <p className="text-xs text-slate-500">{result.name}님 임시 비밀번호</p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xl font-bold tracking-[0.2em] text-slate-900">{result.tempPassword}</span>
-              <button onClick={copyTemp} className="text-slate-400 hover:text-slate-700 transition-colors p-1" title="복사">
-                {copied ? <Check size={15} /> : <Copy size={15} />}
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">본인에게 전달하고, 입장 후 비밀번호를 바꾸라고 안내해주세요.</p>
+            <p className="text-sm text-slate-800">
+              {resetName}님 비밀번호를 <span className="font-bold">{RESET_PASSWORD}</span>로 초기화했어요.
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">입장 후 바로 비밀번호를 바꾸라고 안내해주세요.</p>
           </div>
         )}
       </div>
